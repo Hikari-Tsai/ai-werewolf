@@ -101,6 +101,12 @@ class Room:
         p.model = p.brain.model_label
         return p
 
+    def shuffle_seats(self):
+        """開局前把座位順序打亂。players 是 dict，順序就是前端的入座順序。"""
+        items = list(self.players.items())
+        random.shuffle(items)
+        self.players = dict(items)
+
     def remove_player(self, p: Player):
         if self.phase == "lobby":
             self.players.pop(p.pid, None)
@@ -123,7 +129,10 @@ class Room:
             "ends_at": self.phase_ends_at,
             "server_time": time.time(),
             "topic": self.topic,
-            "players": [q.public() for q in self.players.values()],
+            # 大廳階段匿名：只給人數和「哪個是你」，不然看加入順序就知道開局後多出來的是 AI
+            "players": ([{"alias": "", "avatar": -1, "alive": True, "typing": False, "connected": True,
+                          "me": bool(p and q.pid == p.pid)} for q in self.players.values()]
+                        if self.phase == "lobby" else [q.public() for q in self.players.values()]),
             "you": p.alias if p else None,
             "nickname": p.nickname if p else None,
             "is_host": bool(p and p.pid == self.host_pid),
@@ -258,8 +267,17 @@ class Room:
             self.used_topics.add(self.topic)
         else:
             self.topic = ""
-        await self._set_phase("discuss", self.cfg["discuss_seconds"])
-        await asyncio.sleep(self.cfg["discuss_seconds"])
+        secs = self.cfg["discuss_seconds"]
+        await self._set_phase("discuss", secs)
+        # 討論夠長的話，最後 30 秒提醒大家講一下懷疑誰，不要默默等投票
+        warn = 30 if secs >= 90 else 0
+        await asyncio.sleep(secs - warn)
+        if warn:
+            text = f"剩 {warn} 秒就要投票了，講一下你覺得誰最可疑吧"
+            self.log({"ev": "notice", "round": self.round, "text": text})
+            await self.broadcast({"type": "notice", "text": text})
+            self.emit({"type": "notice", "seconds": warn})
+            await asyncio.sleep(warn)
 
     async def _vote_phase(self):
         self._vote_event.clear()

@@ -49,13 +49,37 @@ header { display: flex; justify-content: space-between; align-items: center; pad
 #invite { display: flex; gap: 14px; align-items: center; justify-content: space-between; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin: 8px 0; font-size: 13px; }
 #invite-qr { width: 120px; height: 120px; background: #fff; border-radius: 8px; padding: 4px; flex: none; }
 .big-code { font-size: 40px; font-weight: 700; letter-spacing: 4px; color: var(--accent); line-height: 1.1; margin: 2px 0 4px; }
+/* 房號是個欄位：房主可以直接點進去改，其他人唯讀、看起來就像一般文字 */
+input.big-code { display: block; width: 100%; max-width: 260px; background: none; border: 1px dashed transparent; border-radius: 8px; padding: 0 6px; margin-left: -6px; text-transform: uppercase; font-family: inherit; }
+input.big-code[readonly] { pointer-events: none; }
+input.big-code:not([readonly]) { border-color: var(--line); cursor: text; }
+input.big-code:not([readonly]):focus { outline: none; border-style: solid; border-color: var(--accent); }
+.notice { background: #3a1f1d; border: 1px solid #7a3a35; color: #ffb3ad; border-radius: 12px; padding: 8px 12px; margin: 8px 0; font-size: 15px; animation: notice-in .4s ease-out; }
+@keyframes notice-in { from { transform: translateY(-6px); opacity: 0; } to { transform: none; opacity: 1; } }
 .topic { background: #2a2416; border: 1px solid #5a4a1e; color: #ffd98a; border-radius: 12px; padding: 8px 12px; margin: 8px 0; font-size: 15px; }
 
 #table { position: relative; width: 100%; aspect-ratio: 1.45; margin: 8px auto 48px; }
 #table-center { position: absolute; left: 50%; top: 50%; width: 46%; height: 52%; transform: translate(-50%, -50%);
   border-radius: 50%; background: #3a2d20; border: 6px solid #55402c; display: flex; align-items: center; justify-content: center; color: #c9a77a; font-size: 14px; }
-.seat { position: absolute; width: 72px; margin-left: -36px; margin-top: -40px; text-align: center; transition: transform .2s; }
-.seat .face { width: 56px; height: 56px; margin: 0 auto; border-radius: 50%; border: 3px solid transparent; background: var(--card); overflow: hidden; }
+.seat { position: absolute; width: 72px; margin-left: -36px; margin-top: -40px; text-align: center; transition: transform .2s, left .6s ease, top .6s ease; animation: seat-in .5s ease-out; }
+@keyframes seat-in { from { transform: scale(.5); opacity: 0; } to { transform: none; opacity: 1; } }
+.seat .face { position: relative; width: 56px; height: 56px; margin: 0 auto; border-radius: 50%; border: 3px solid transparent; background: var(--card); overflow: hidden; }
+/* 大廳：全部匿名，灰色問號 */
+.seat.anon .face { background: var(--line); color: var(--muted); font-size: 26px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.seat.anon .name { color: var(--muted); }
+/* 放逐：抖一下、放大、往上飄走，再以灰掉的樣子落回座位 */
+.seat.exiled { animation: exile 2.2s ease-in-out; z-index: 4; }
+@keyframes exile {
+  0% { transform: none; opacity: 1; }
+  10% { transform: scale(1.25) rotate(-8deg); opacity: 1; }
+  20% { transform: scale(1.25) rotate(8deg); }
+  30% { transform: scale(1.25) rotate(-8deg); }
+  40% { transform: scale(1.25) rotate(0); opacity: 1; }
+  65% { transform: scale(.6) translateY(-90px) rotate(25deg); opacity: 0; }
+  75% { transform: scale(.9) translateY(0); opacity: 0; }
+  100% { transform: none; opacity: .4; }
+}
+.seat.dead .face::after { content: '✕'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--danger); font-size: 30px; font-weight: 700; text-shadow: 0 0 6px #000; }
 .seat .face svg { width: 100%; height: 100%; display: block; }
 .seat .name { font-size: 12px; margin-top: 2px; white-space: nowrap; }
 .seat.me .name { color: var(--accent); font-weight: 600; }

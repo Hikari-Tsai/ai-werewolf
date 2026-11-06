@@ -86,6 +86,6 @@ def make_persona(rng: random.Random | None = None) -> Persona:
         msg_len=r.choice(["短", "短", "中"]),
         use_period=r.choice([0.0, 0.05, 0.1, 0.3]),
         english_mix=r.random() < 0.4,
-        typo_rate=r.choice([0.0, 0.02, 0.05]),
+        typo_rate=r.choice([0.03, 0.06, 0.1, 0.15]),   # 注音選字錯很常見，幾乎每個人多少都會
         emoji_rate=r.choice([0.0, 0.0, 0.1, 0.2]),
     )

@@ -15,10 +15,11 @@
     <p id="entry-sub" class="sub">一群人在聊天室裡聊天，其中幾個是 AI。每輪投票放逐一人，把 AI 全部找出來。</p>
     <label>你的暱稱（只有你自己看得到）<input id="nickname" maxlength="12" placeholder="例如：小明"></label>
     <div class="row">
+      <input id="new-code" maxlength="8" placeholder="自訂房號（選填，2 到 8 碼英數字）" autocapitalize="characters">
       <button id="btn-create" class="primary">開新房間</button>
     </div>
     <div class="row">
-      <input id="code" maxlength="4" placeholder="房號" autocapitalize="characters">
+      <input id="code" maxlength="8" placeholder="房號" autocapitalize="characters">
       <input id="password" placeholder="密碼（有的話）">
       <button id="btn-join">加入</button>
     </div>
@@ -33,10 +34,11 @@
     </header>
 
     <div id="invite" class="hidden">
-      <div><div class="label">房號</div><div id="invite-code" class="big-code"></div><div class="muted">掃 QR code 加入</div></div>
+      <div><div class="label">房號 <span id="invite-edit-hint" class="muted hidden">（點一下可以改）</span></div><input id="invite-code" class="big-code" maxlength="8" autocapitalize="characters" autocomplete="off" readonly><div class="muted">掃 QR code 加入</div></div>
       <img id="invite-qr" alt="邀請連結 QR code">
     </div>
     <div id="topic" class="topic hidden"></div>
+    <div id="notice" class="notice hidden"></div>
 
     <div id="table">
       <div id="seats"></div>

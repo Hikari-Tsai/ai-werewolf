@@ -40,6 +40,7 @@ class AIBrain:
         self.busy = False
         self.pending_mention = False
         self.cancel_typing = False
+        self.last_call = False          # 房間廣播了「快投票了」
         room.listeners.append(self.on_event)
 
     # ---------- 生命週期 ----------
@@ -68,7 +69,9 @@ class AIBrain:
         try:
             while True:
                 try:
-                    ev = await asyncio.wait_for(self.queue.get(), timeout=random.uniform(3, 7))
+                    # 這輪還沒開口時醒得勤一點，不然開場要等太久、反而可疑
+                    wait = random.uniform(1.5, 4) if self.spoke_this_round == 0 else random.uniform(3, 7)
+                    ev = await asyncio.wait_for(self.queue.get(), timeout=wait)
                     await self._handle(ev)
                 except asyncio.TimeoutError:
                     pass
@@ -87,10 +90,13 @@ class AIBrain:
             if self.phase == "discuss":
                 self.spoke_this_round = 0
                 self.pending_mention = False
-                # 開場不要秒回：每個人進入狀況的時間不同
-                self.first_delay = min(20.0, random.uniform(4, 22) / max(0.6, self.persona.talkativeness))
+                self.last_call = False
+                # 開場不要秒回，但也別拖太久：真人看到話題幾秒內就會開始打字
+                self.first_delay = min(12.0, random.uniform(2, 9) / max(0.6, self.persona.talkativeness))
             elif self.phase == "vote" and self.p.alive:
                 asyncio.create_task(self._vote(ev.get("seconds", 30)))
+        elif t == "notice":
+            self.last_call = True
         elif t == "chat" and ev["alias"] != self.p.alias:
             if self.p.alias in ev["text"]:
                 self.pending_mention = True
@@ -118,8 +124,10 @@ class AIBrain:
             u += 0.25
         if silence > 25 and self.spoke_this_round < 6:
             u += 0.3
-        if self.spoke_this_round == 0 and left < 40:
-            u += 0.5  # 整輪沒講話最可疑，快結束前至少講一句
+        if self.spoke_this_round == 0:
+            u += 0.5  # 整輪沒講話最可疑：開場就該丟一句，快結束前更要講
+        if self.last_call and self.spoke_this_round < 3:
+            u += 0.35  # 房間提醒快投票了，真人多半會講一下懷疑誰
         if since_me < 10:
             u *= 0.2
         if self.spoke_this_round >= 8:
@@ -160,6 +168,7 @@ class AIBrain:
             "note": self.note,
             "mentioned": self.pending_mention,
             "quiet": bool(self.room.chat) and now - self.room.chat[-1]["ts"] > 25,
+            "last_call": self.last_call,
         }
 
     async def _llm(self, user: str, max_tokens: int = 400) -> dict:
@@ -176,11 +185,16 @@ class AIBrain:
         self.last_seen_idx = len(self.room.chat)
         mentioned = self.pending_mention
         self.pending_mention = False
-        await asyncio.sleep(timing.reading_delay(unread) + timing.think_delay(mentioned))
-
         ctx = self._ctx()
         ctx["mentioned"] = mentioned
-        data = await self._llm(prompts.discuss_prompt(ctx))
+        # 模型本身就要跑好幾秒，和「閱讀、思考」的延遲重疊著跑，不然加起來太慢
+        gen = asyncio.create_task(self._llm(prompts.discuss_prompt(ctx)))
+        try:
+            await asyncio.sleep(timing.reading_delay(unread) + timing.think_delay(mentioned))
+            data = await gen
+        except asyncio.CancelledError:
+            gen.cancel()
+            raise
         if data.get("note"):
             self.note = str(data["note"])[:120]
             await self.room.ai_note(self.p, self.note)
@@ -210,7 +224,7 @@ class AIBrain:
 
     async def _type_and_send(self, text: str):
         pair = timing.typo_pair(text, self.persona)
-        to_send = [pair[0], pair[1]] if pair else [text]
+        to_send = [pair[0]] + ([pair[1]] if pair[1] else []) if pair else [text]
         for k, t in enumerate(to_send):
             self.cancel_typing = False
             await self.room.set_typing(self.p, True)

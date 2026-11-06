@@ -21,14 +21,13 @@
   if (invitedRoom) {
     // 從邀請連結進來：只能加入這間房，不給開新房
     $('code').value = invitedRoom;
-    $('code').readOnly = true;
     $('btn-create').closest('.row').classList.add('hidden');
     $('entry-title').textContent = `加入房間 ${invitedRoom}`;
     $('entry-sub').textContent = '取個暱稱就能進房，暱稱只有你自己看得到。';
   }
   $('nickname').value = localStorage.getItem('tw_nick') || '';
 
-  $('btn-create').onclick = () => enter({ type: 'create', nickname: nick() });
+  $('btn-create').onclick = () => enter({ type: 'create', nickname: nick(), code: $('new-code').value.trim().toUpperCase() });
   $('btn-join').onclick = () => enter({ type: 'join', code: $('code').value.trim().toUpperCase(), nickname: nick(), password: $('password').value, pid });
   function nick() { const n = $('nickname').value.trim() || '玩家'; localStorage.setItem('tw_nick', n); return n; }
   function enter(msg) {
@@ -40,12 +39,11 @@
   function handle(m) {
     switch (m.type) {
       case 'joined':
-        pid = m.pid; code = m.code; localStorage.setItem('tw_pid', pid);
-        history.replaceState(null, '', `?room=${code}`);
+        pid = m.pid; localStorage.setItem('tw_pid', pid); setCode(m.code);
         $('screen-entry').classList.add('hidden'); $('screen-room').classList.remove('hidden');
-        $('room-code').textContent = code;
         break;
-      case 'room_state': state = m; render(); break;
+      case 'room_state': state = m; if (m.code !== code) setCode(m.code); render(); break;
+      case 'notice': showNotice(m.text); break;
       case 'history': $('chat').innerHTML = ''; m.chat.forEach(addChat); $('chat').scrollTop = $('chat').scrollHeight; break;
       case 'chat': addChat(m); showBubble(m.alias, m.text); break;
       case 'typing': setTyping(m.alias, m.on); break;
@@ -63,6 +61,25 @@
     }
   }
 
+  // 房號可能被房主改掉：網址、標題、邀請卡一起換
+  function setCode(c) {
+    code = c; history.replaceState(null, '', `?room=${code}`);
+    $('room-code').textContent = code;
+    if (document.activeElement !== $('invite-code')) $('invite-code').value = code;
+  }
+  // 房主在大廳點房號就能改；Enter 或離開欄位才送出
+  $('invite-code').addEventListener('change', () => {
+    const c = $('invite-code').value.trim().toUpperCase();
+    if (c && c !== code) send({ type: 'rename', code: c }); else $('invite-code').value = code;
+  });
+  $('invite-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('invite-code').blur(); });
+
+  // 最後 30 秒的提醒：聊天室一行、上面一條橫幅，到投票就收掉
+  function showNotice(text) {
+    sysMsg(text); toast(text);
+    $('notice').textContent = text; $('notice').classList.remove('hidden');
+  }
+
   // ---------- 畫面 ----------
   function render() {
     const s = state, me = s.you;
@@ -72,12 +89,14 @@
     // 有通道就用公開網址，否則用現在這個（區網）網址；大廳時顯示連結和 QR code
     const invite = s.public_url ? `${s.public_url}/?room=${s.code}` : `${location.origin}/?room=${s.code}`;
     $('invite').classList.toggle('hidden', s.phase !== 'lobby');
-    $('invite-code').textContent = s.code;
+    $('invite-code').readOnly = !s.is_host;
+    $('invite-edit-hint').classList.toggle('hidden', !s.is_host);
     const qrSrc = `/api/qr?text=${encodeURIComponent(invite)}`;
     if ($('invite-qr').getAttribute('src') !== qrSrc) $('invite-qr').src = qrSrc;
     $('btn-copy').onclick = () => { navigator.clipboard?.writeText(invite); toast('已複製邀請連結'); };
     $('topic').classList.toggle('hidden', !s.topic || s.phase === 'lobby');
     $('topic').textContent = s.topic ? `本輪話題：${s.topic}` : '';
+    if (s.phase !== 'discuss') $('notice').classList.add('hidden');
     $('host-panel').classList.toggle('hidden', !(s.is_host && s.phase === 'lobby'));
     $('wait-hint').classList.toggle('hidden', !(!s.is_host && s.phase === 'lobby'));
     if (s.is_host && s.phase === 'lobby') fillCfg(s.cfg);
@@ -118,19 +137,21 @@
     const W = box.clientWidth || 600, H = box.clientHeight || 400;
     const keep = new Set();
     ps.forEach((p, i) => {
-      keep.add(p.alias);
-      let el = box.querySelector(`[data-alias="${p.alias}"]`);
+      // 大廳階段伺服器不給名字和頭像，座位用序號當 key；開局後換成化名，整桌一起揭曉
+      const anon = !p.alias, key = anon ? `#${i}` : p.alias, isMe = anon ? !!p.me : p.alias === state.you;
+      keep.add(key);
+      let el = box.querySelector(`[data-alias="${key}"]`);
       if (!el) {
-        el = document.createElement('div'); el.className = 'seat'; el.dataset.alias = p.alias;
-        el.innerHTML = `<div class="typing-dots">•••</div><div class="bubble"></div><div class="face">${avatarSVG(p.avatar)}</div><div class="name"></div><div class="tag"></div>`;
+        el = document.createElement('div'); el.className = 'seat' + (anon ? ' anon' : ''); el.dataset.alias = key;
+        el.innerHTML = `<div class="typing-dots">•••</div><div class="bubble"></div><div class="face">${anon ? '?' : avatarSVG(p.avatar)}</div><div class="name"></div><div class="tag"></div>`;
         el.onclick = () => { if (el.classList.contains('votable')) { send({ type: 'vote', target: p.alias, reason: reason() }); markVoted(p.alias); } };
         box.appendChild(el);
       }
       const a = (i / n) * Math.PI * 2 - Math.PI / 2;
       el.style.left = (W / 2 + Math.cos(a) * W * 0.42) + 'px';
       el.style.top = (H / 2 + Math.sin(a) * H * 0.40 + 10) + 'px';
-      el.querySelector('.name').textContent = p.alias + (p.alias === state.you ? '（你）' : '');
-      el.classList.toggle('me', p.alias === state.you);
+      el.querySelector('.name').textContent = anon ? (isMe ? '你' : '？') : p.alias + (isMe ? '（你）' : '');
+      el.classList.toggle('me', isMe);
       el.classList.toggle('dead', !p.alive);
       el.classList.toggle('offline', !p.connected && p.alive);
       el.classList.toggle('typing', !!p.typing && state.phase === 'discuss');
@@ -193,7 +214,9 @@
     tick(); countdownTimer = setInterval(tick, 500);
   }
 
+  let shownResultRound = 0;
   function showResult(r) {
+    const first = shownResultRound !== r.round; shownResultRound = r.round;
     let h = `<div>第 ${r.round} 輪開票</div>`;
     if (r.eliminated) {
       const who = r.was_ai ? (r.model ? `AI（${esc(r.model)}）` : 'AI') : `真人${r.nickname ? '：' + esc(r.nickname) : ''}`;
@@ -203,9 +226,16 @@
     const rows = Object.entries(r.votes).map(([a, t]) => `<tr><td>${esc(a)}</td><td>→ ${t ? esc(t) : '棄票'}</td></tr>`).join('');
     h += `<table>${rows}</table>`;
     $('result').innerHTML = h;
-    sysMsg(r.eliminated ? `${r.eliminated} 被放逐（${r.was_ai ? 'AI' : '真人' + (r.nickname ? ' ' + r.nickname : '')}）` : '本輪平票');
     document.querySelectorAll('.seat').forEach(el => el.classList.remove('voted'));
     if (r.eliminated) tagSeat({ alias: r.eliminated, is_ai: r.was_ai, nickname: r.nickname });
+    if (!first) return;   // 同一輪再收到 room_state（有人斷線之類）不要重播
+    sysMsg(r.eliminated ? `${r.eliminated} 被放逐（${r.was_ai ? 'AI' : '真人' + (r.nickname ? ' ' + r.nickname : '')}）` : '本輪平票');
+    if (r.eliminated) exileSeat(r.eliminated);
+  }
+  // 放逐動畫：座位抖一下、放大、往上飄走，再以灰掉的樣子回到位子上
+  function exileSeat(alias) {
+    const el = document.querySelector(`.seat[data-alias="${alias}"]`); if (!el) return;
+    el.classList.add('exiled');   // 不拿掉：拿掉會讓入座動畫重播一次
   }
   function showGameOver(m) {
     const h = `<div class="big ${m.winner === 'ai' ? 'ai' : 'human'}">${m.winner === 'ai' ? 'AI 獲勝' : '真人獲勝'}</div>` +

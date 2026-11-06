@@ -56,7 +56,7 @@ async def qr(text: str):
 @app.get("/api/log/{log_id}")
 async def get_log(log_id: str):
     """只提供已經結束的對局紀錄，給下載／上傳用。"""
-    if not re.fullmatch(r"\d{8}_\d{6}_[A-Z0-9]{4}\.jsonl", log_id):
+    if not re.fullmatch(r"\d{8}_\d{6}_[A-Z0-9]{2,8}\.jsonl", log_id):
         return PlainTextResponse("bad id", status_code=400)
     path = os.path.join(config.LOG_DIR, log_id)
     if not os.path.exists(path):
@@ -74,6 +74,19 @@ def new_code() -> str:
         code = "".join(random.choices(string.ascii_uppercase.replace("O", "").replace("I", "") + "23456789", k=4))
         if code not in rooms:
             return code
+
+
+CODE_RE = re.compile(r"[A-Z0-9]{2,8}")
+
+
+def check_code(raw: str) -> tuple[str, str]:
+    """自訂房號：2 到 8 個英數字。回傳 (正規化後的房號, 錯誤訊息)。"""
+    code = (raw or "").strip().upper()
+    if not CODE_RE.fullmatch(code):
+        return code, "房號要 2 到 8 個英文或數字"
+    if code in rooms:
+        return code, "這個房號已經有人用了，換一個"
+    return code, ""
 
 
 async def err(ws: WebSocket, text: str):
@@ -96,7 +109,13 @@ async def ws_endpoint(ws: WebSocket):
 
             # ----- 進房前 -----
             if t == "create":
-                code = new_code()
+                if (m.get("code") or "").strip():
+                    code, why = check_code(m["code"])
+                    if why:
+                        await err(ws, why)
+                        continue
+                else:
+                    code = new_code()
                 room = rooms[code] = Room(code)
                 me = room.add_human(m.get("nickname", ""), ws)
                 await ws.send_text(json.dumps({"type": "joined", "pid": me.pid, "code": room.code}))
@@ -145,6 +164,17 @@ async def ws_endpoint(ws: WebSocket):
                 room.cfg["vote_seconds"] = max(10, min(120, room.cfg["vote_seconds"]))
                 room.cfg["max_rounds"] = max(1, min(20, room.cfg["max_rounds"]))
                 await room.push_state()
+            elif t == "rename" and me.pid == room.host_pid and room.phase == "lobby":
+                code, why = check_code(m.get("code", ""))
+                if code == room.code:
+                    continue
+                if why:
+                    await err(ws, why)
+                    continue
+                rooms.pop(room.code, None)
+                rooms[code] = room
+                room.code = code
+                await room.push_state()
             elif t == "start" and me.pid == room.host_pid and room.phase == "lobby":
                 humans = [p for p in room.players.values() if not p.is_ai]
                 if len(humans) < 2 and room.cfg["ai_count"] < 1:
@@ -158,6 +188,8 @@ async def ws_endpoint(ws: WebSocket):
                     room.remove_player(p)
                 for i in range(room.cfg["ai_count"]):
                     room.add_ai(lambda r, p, i=i: AIBrain(r, p, i))
+                # 座位洗牌：不然 AI 永遠排在最後加入的位置，一看就知道
+                room.shuffle_seats()
                 room.start()
                 await room.push_state()
             elif t == "typing":

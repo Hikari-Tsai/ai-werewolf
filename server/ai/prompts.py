@@ -64,9 +64,10 @@ def discuss_prompt(ctx: dict) -> str:
     topic = f"本輪話題：{ctx['topic']}\n" if ctx["topic"] else ""
     mention = "有人剛剛提到你或在質疑你，真人這時候通常會回，但不用急著解釋。\n" if ctx["mentioned"] else ""
     quiet = "聊天室冷場了一陣子，可以丟個話或接話題，也可以不理。\n" if ctx["quiet"] else ""
+    last = "快要投票了，真人這時候通常會講一下自己懷疑誰、或幫自己講一句，一樣要短。\n" if ctx.get("last_call") else ""
     return f"""現在是第 {ctx['round']} 輪的討論，剩 {ctx['seconds_left']} 秒。還在場的人：{ctx['alive']}。
 {topic}你上次的內心筆記：{ctx['note'] or '（無）'}
-{mention}{quiet}
+{mention}{quiet}{last}
 最近的聊天內容（「{ctx['alias']}」是你自己）：
 {lines}
 
