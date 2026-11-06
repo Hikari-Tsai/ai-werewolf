@@ -22,6 +22,15 @@ app.mount("/static", StaticFiles(directory=WEB), name="static")
 rooms: dict[str, Room] = {}
 
 
+@app.middleware("http")
+async def no_cache_static(request, call_next):
+    """前端是靜態檔、沒有版本號，改完要重新整理就生效，所以叫瀏覽器每次都回來問。"""
+    resp = await call_next(request)
+    if request.url.path.startswith("/static/") or request.url.path == "/":
+        resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
+
 @app.get("/")
 async def index():
     return FileResponse(os.path.join(WEB, "index.html"))
