@@ -1,0 +1,40 @@
+name: 分享一局對局紀錄
+description: 把你玩過的一局聊天紀錄分享出來，用來改進 AI 的偽裝能力
+title: "[log] "
+labels: ["game-log"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        謝謝你！紀錄裡沒有暱稱和 API key，但有整場的聊天內容。
+        **請先確認同房的朋友都同意公開。** 送出後機器人會檢查格式、遮掉電話和 Email 之類的個資，再放進 `data/games/`。
+        放進去的紀錄以 CC0 釋出，任何人都可以拿去研究。
+  - type: checkboxes
+    id: consent
+    attributes:
+      label: 同意
+      options:
+        - label: 同房的人都同意把這局聊天紀錄公開
+          required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: 對局紀錄
+      description: 遊戲結束畫面按「下載紀錄」拿到的 .jsonl 檔，把整個內容貼進來（一行一個 JSON）
+      render: json
+    validations:
+      required: true
+  - type: dropdown
+    id: humans
+    attributes:
+      label: 這局有幾個真人
+      options: ["2", "3", "4", "5", "6", "7 以上"]
+  - type: textarea
+    id: tells
+    attributes:
+      label: 你覺得 AI 哪裡露餡（選填）
+      description: 例如「回太快」「講話太客氣」「都不講自己的事」，這是最有價值的資訊
+  - type: textarea
+    id: fooled
+    attributes:
+      label: 有沒有 AI 騙過你們？為什麼（選填）

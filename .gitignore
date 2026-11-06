@@ -1,0 +1,24 @@
+# 祕密
+.env
+.env.*
+!.env.example
+
+# 本機對局紀錄（分享請走 Issue 表單，進 data/games/）
+logs/
+
+# 自動下載的 cloudflared
+bin/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# 編輯器與系統
+.vscode/
+.idea/
+.claude/
+.DS_Store
+Thumbs.db

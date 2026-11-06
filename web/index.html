@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>誰是 AI？</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- 大廳：建房／加入 -->
+  <section id="screen-entry" class="screen">
+    <h1 id="entry-title">誰是 AI？</h1>
+    <p id="entry-sub" class="sub">一群人在聊天室裡聊天，其中幾個是 AI。每輪投票放逐一人，把 AI 全部找出來。</p>
+    <label>你的暱稱（只有你自己看得到）<input id="nickname" maxlength="12" placeholder="例如：小明"></label>
+    <div class="row">
+      <button id="btn-create" class="primary">開新房間</button>
+    </div>
+    <div class="row">
+      <input id="code" maxlength="4" placeholder="房號" autocapitalize="characters">
+      <input id="password" placeholder="密碼（有的話）">
+      <button id="btn-join">加入</button>
+    </div>
+    <p id="entry-error" class="error"></p>
+  </section>
+
+  <!-- 房間 -->
+  <section id="screen-room" class="screen hidden">
+    <header>
+      <div class="brand"><span class="title">AI狼人殺</span><span class="label">房號</span> <b id="room-code"></b> <button id="btn-copy" class="small">複製連結</button></div>
+      <div id="phase-pill"><span id="phase-name">等待中</span> <span id="countdown"></span><span id="cost-live" class="muted"></span></div>
+    </header>
+
+    <div id="invite" class="hidden">
+      <div class="muted">用手機掃右邊的 QR code 就能加入這間房，<br>或按上面的「複製連結」傳給朋友。</div>
+      <img id="invite-qr" alt="邀請連結 QR code">
+    </div>
+    <div id="topic" class="topic hidden"></div>
+
+    <div id="table">
+      <div id="seats"></div>
+      <div id="table-center"><div id="round-label"></div></div>
+    </div>
+
+    <!-- 房主設定 -->
+    <div id="host-panel" class="panel hidden">
+      <h3>房主設定</h3>
+      <div class="grid">
+        <label>AI 數量 <span class="help" data-tip="混進房間的 AI 有幾個。AI 數量追平真人就 AI 獲勝，所以建議比真人少。">?</span><input id="cfg-ai_count" type="number" min="0" max="8"></label>
+        <label>討論秒數 <span class="help" data-tip="每輪自由聊天的時間。太短 AI 來不及開口，建議 120 秒以上。">?</span><input id="cfg-discuss_seconds" type="number" min="30" max="600" step="10"></label>
+        <label>投票秒數 <span class="help" data-tip="投票階段的時間。全部人投完會提早結束，沒投的算棄票。">?</span><input id="cfg-vote_seconds" type="number" min="10" max="120" step="5"></label>
+        <label>最多幾輪 <span class="help" data-tip="到這一輪還沒分出勝負就算真人贏，因為 AI 沒能撐到追平。">?</span><input id="cfg-max_rounds" type="number" min="1" max="20"></label>
+        <label>模型 <span class="help" data-tip="自動混用：AI 平均分配到 Claude 和 OpenAI，各用不同型號，講話風格會不一樣。只用一家就全部同家。">?</span><select id="cfg-model_strategy"><option value="auto">自動混用</option><option value="anthropic">只用 Claude</option><option value="openai">只用 OpenAI</option></select></label>
+        <label>房間密碼 <span class="help" data-tip="設了之後，拿到連結的人還要輸密碼才能加入。公開網址給不熟的人時建議設。">?</span><input id="cfg-password" placeholder="留空就不用"></label>
+        <label class="check"><input id="cfg-topics_on" type="checkbox"> 每輪給話題 <span class="help" data-tip="每輪隨機給一個台灣生活話題（例如最雷的店、小時候的綽號），刻意挑真人好答、AI 容易露餡的。關掉就純自由聊。">?</span></label>
+        <label class="check"><input id="cfg-ai_know_each_other" type="checkbox"> AI 互相知道身分 <span class="help" data-tip="像狼人殺的狼隊：AI 知道哪些人也是 AI，投票不會投同伴、會分散票數、不太明顯地幫同伴講話。關掉時每個 AI 各自為政，也可能互投。開了難度明顯變高。">?</span></label>
+      </div>
+      <div class="row">
+        <button id="btn-start" class="primary">開始遊戲</button>
+        <span class="muted">AI 用的是這台伺服器的 key，每局上限 $3</span>
+      </div>
+    </div>
+    <p id="wait-hint" class="muted hidden">等房主開始…</p>
+
+    <!-- 結果 / 結束 -->
+    <div id="result" class="panel hidden"></div>
+
+    <!-- 聊天 -->
+    <div id="chat-wrap">
+      <div id="chat"></div>
+      <div id="typing-bar" class="muted"></div>
+      <form id="chat-form">
+        <input id="chat-input" maxlength="60" placeholder="說點什麼…" autocomplete="off">
+        <button type="submit">送出</button>
+      </form>
+      <div id="vote-bar" class="hidden">
+        <div class="row"><span id="vote-hint">點上面的頭像投票，或</span> <button id="btn-abstain" class="small">棄票</button>
+        <span id="vote-progress" class="muted"></span></div>
+        <form id="reason-form" class="row"><input id="vote-reason" maxlength="200" placeholder="為什麼投這個人？（選填，會幫助我們改進 AI）"><button type="submit" class="small">記下</button></form>
+      </div>
+    </div>
+
+    <!-- 觀眾視角 -->
+    <div id="spectate" class="panel hidden">
+      <h3>觀眾視角（你已出局）</h3>
+      <div id="spectate-list"></div>
+      <div id="spectate-notes"></div>
+    </div>
+  </section>
+</div>
+<div id="toast" class="hidden"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

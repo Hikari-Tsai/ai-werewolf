@@ -1,0 +1,72 @@
+name: 收對局紀錄
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  ingest:
+    if: contains(github.event.issue.labels.*.name, 'game-log')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 把 Issue 內容存成檔案
+        env:
+          BODY: ${{ github.event.issue.body }}
+        run: printf '%s' "$BODY" > /tmp/body.md
+
+      - name: 驗證與去識別化
+        id: ingest
+        run: |
+          set +e
+          python scripts/ingest.py --issue-body /tmp/body.md --issue ${{ github.event.issue.number }} \
+            --uploader "${{ github.event.issue.user.login }}" --out-dir data/games > /tmp/result.txt
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          cat /tmp/result.txt
+
+      - name: 不合格就留言
+        if: steps.ingest.outputs.code != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const msg = fs.readFileSync('/tmp/result.txt', 'utf8');
+            await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number,
+              body: `這份紀錄機器人檢查沒過：\n\n${msg}\n\n修好之後編輯這個 Issue 就會重新檢查。` });
+            await github.rest.issues.addLabels({ ...context.repo, issue_number: context.issue.number, labels: ['invalid'] });
+
+      - name: 開 PR 把紀錄放進 data/games
+        if: steps.ingest.outputs.code == '0'
+        id: pr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: log/issue-${{ github.event.issue.number }}
+          commit-message: "data: 對局紀錄（issue #${{ github.event.issue.number }}）"
+          title: "對局紀錄：issue #${{ github.event.issue.number }}"
+          body: |
+            來自 #${{ github.event.issue.number }}，已自動驗證並遮掉電話、Email、網址等個資。
+            合併前請快速看一眼聊天內容有沒有漏網的個資或惡意內容。
+
+            Closes #${{ github.event.issue.number }}
+          labels: game-log
+          add-paths: data/games/*.jsonl
+
+      - name: 通過就留言
+        if: steps.ingest.outputs.code == '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const msg = fs.readFileSync('/tmp/result.txt', 'utf8');
+            await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number,
+              body: `收到，謝謝！檢查通過：\n\n\`\`\`\n${msg}\n\`\`\`\n\n已開 PR #${{ steps.pr.outputs.pull-request-number }}，合併後這個 Issue 會自動關閉。` });

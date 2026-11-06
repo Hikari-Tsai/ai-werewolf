@@ -1,0 +1,63 @@
+name: 演化 AI 人設
+
+on:
+  schedule:
+    - cron: "0 18 * * 0"   # 每週一台灣時間凌晨 2 點
+  workflow_dispatch:
+    inputs:
+      generations:
+        description: 跑幾代
+        default: "4"
+      games:
+        description: 每代幾局
+        default: "6"
+      budget:
+        description: 費用上限（美金）
+        default: "5"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  evolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      - name: 有沒有新資料
+        id: fresh
+        run: |
+          new=$(python evolve/evolve.py --check-new && echo yes || echo no)
+          echo "new=$new" >> "$GITHUB_OUTPUT"
+
+      - name: 跑演化
+        if: steps.fresh.outputs.new == 'yes' || github.event_name == 'workflow_dispatch'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python evolve/evolve.py \
+            --generations ${{ github.event.inputs.generations || 4 }} \
+            --games ${{ github.event.inputs.games || 6 }} \
+            --budget ${{ github.event.inputs.budget || 5 }}
+
+      - name: 開 PR
+        if: steps.fresh.outputs.new == 'yes' || github.event_name == 'workflow_dispatch'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: evolve/${{ github.run_id }}
+          commit-message: "genomes: 演化第 ${{ github.run_number }} 次"
+          title: "演化結果：run ${{ github.run_number }}"
+          body-path: genomes/REPORT.md
+          add-paths: |
+            genomes/*.json
+            genomes/REPORT.md
+            genomes/history/*.json

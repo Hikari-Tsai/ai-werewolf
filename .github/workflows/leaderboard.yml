@@ -1,0 +1,29 @@
+name: 更新天梯
+
+on:
+  push:
+    branches: [main]
+    paths: ["data/games/**", "scripts/leaderboard.py"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  leaderboard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: python scripts/leaderboard.py --out LEADERBOARD.md
+
+      - name: 直接提交到 main（純產生的檔案，不需要 review）
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add LEADERBOARD.md
+          git diff --cached --quiet && echo "沒有變化" || git commit -m "天梯：更新" && git push
