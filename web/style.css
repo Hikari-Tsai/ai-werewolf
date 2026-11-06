@@ -48,6 +48,7 @@ header { display: flex; justify-content: space-between; align-items: center; pad
 .brand .title { font-size: 20px; font-weight: 700; color: var(--accent); margin-right: 6px; }
 #invite { display: flex; gap: 14px; align-items: center; justify-content: space-between; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin: 8px 0; font-size: 13px; }
 #invite-qr { width: 120px; height: 120px; background: #fff; border-radius: 8px; padding: 4px; flex: none; }
+.big-code { font-size: 40px; font-weight: 700; letter-spacing: 4px; color: var(--accent); line-height: 1.1; margin: 2px 0 4px; }
 .topic { background: #2a2416; border: 1px solid #5a4a1e; color: #ffd98a; border-radius: 12px; padding: 8px 12px; margin: 8px 0; font-size: 15px; }
 
 #table { position: relative; width: 100%; aspect-ratio: 1.45; margin: 8px auto 48px; }

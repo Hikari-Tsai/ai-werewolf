@@ -72,6 +72,7 @@
     // 有通道就用公開網址，否則用現在這個（區網）網址；大廳時顯示連結和 QR code
     const invite = s.public_url ? `${s.public_url}/?room=${s.code}` : `${location.origin}/?room=${s.code}`;
     $('invite').classList.toggle('hidden', s.phase !== 'lobby');
+    $('invite-code').textContent = s.code;
     const qrSrc = `/api/qr?text=${encodeURIComponent(invite)}`;
     if ($('invite-qr').getAttribute('src') !== qrSrc) $('invite-qr').src = qrSrc;
     $('btn-copy').onclick = () => { navigator.clipboard?.writeText(invite); toast('已複製邀請連結'); };
