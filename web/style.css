@@ -93,6 +93,7 @@ header { display: flex; justify-content: space-between; align-items: center; pad
 #vote-bar { padding: 4px; font-size: 14px; }
 #vote-bar .row { margin: 4px 0; flex-wrap: wrap; }
 #reason-form input { flex: 1; font-size: 14px; }
+.reason-hint { font-size: 12px; line-height: 1.5; padding: 6px 8px; margin: 4px 0; background: rgba(242, 181, 68, .08); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; }
 #upload-box { text-align: left; font-size: 13px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
 #upload-box .row { justify-content: center; }
 
