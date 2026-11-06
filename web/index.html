@@ -39,7 +39,7 @@
   <!-- 房間 -->
   <section id="screen-room" class="screen hidden">
     <header>
-      <div class="brand"><span class="title">AI狼人殺</span><span class="label">房號</span> <b id="room-code"></b> <button id="btn-copy" class="small">複製連結</button></div>
+      <div class="brand"><span class="title">AI狼人殺</span><span class="label">房號</span> <b id="room-code"></b> <button id="btn-copy" class="small">複製連結</button> <button id="btn-end" class="small danger hidden">結束遊戲</button></div>
       <div id="phase-pill"><span id="phase-name">等待中</span> <span id="countdown"></span><span id="cost-live" class="muted"></span></div>
     </header>
 
@@ -104,6 +104,8 @@
     </div>
   </section>
 </div>
+<!-- 確認視窗：結束遊戲／解散房間 -->
+<div id="confirm" class="hidden"><div id="confirm-card"><div id="confirm-text"></div><div class="row"><button id="confirm-no">取消</button><button id="confirm-yes" class="primary">確定</button></div></div></div>
 <!-- 蓋板字卡：放逐、平票、勝負。點一下可以提早關掉 -->
 <div id="overlay" class="hidden"><div id="overlay-card"></div></div>
 <div id="toast" class="hidden"></div>

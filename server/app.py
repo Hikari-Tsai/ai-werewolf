@@ -212,6 +212,15 @@ async def ws_endpoint(ws: WebSocket):
                 await room.cast_vote(me, m.get("target"), str(m.get("reason", "")))
             elif t == "vote_reason":
                 room.vote_reason(me, str(m.get("reason", "")))
+            elif t == "end" and me.pid == room.host_pid:
+                if room.phase == "lobby":
+                    # 大廳：解散房間，大家回首頁
+                    await room.broadcast({"type": "room_closed", "text": "房主解散了房間"})
+                    room.stop()
+                    if rooms.get(room.code) is room:
+                        rooms.pop(room.code, None)
+                else:
+                    await room.abort()
             elif t == "leave":
                 break
     except WebSocketDisconnect:

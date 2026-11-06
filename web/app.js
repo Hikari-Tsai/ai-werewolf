@@ -59,6 +59,7 @@
       case 'spectate_init': showSpectate(m.players); break;
       case 'spectate': spectateNotes.push(m); renderNotes(); break;
       case 'game_over': showGameOver(m); break;
+      case 'room_closed': toast(m.text); state = null; code = ''; setTimeout(() => { location.href = '/'; }, 1800); break;
       case 'error':
         if (!state) {
           $('entry-error').textContent = m.text;
@@ -84,6 +85,24 @@
   });
   $('invite-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('invite-code').blur(); });
 
+  // 房主結束遊戲／解散房間：先彈視窗確認
+  function askConfirm(text, yes) {
+    return new Promise((resolve) => {
+      $('confirm-text').textContent = text; $('confirm-yes').textContent = yes;
+      $('confirm').classList.remove('hidden');
+      const done = (ok) => { $('confirm').classList.add('hidden'); resolve(ok); };
+      $('confirm-yes').onclick = () => done(true);
+      $('confirm-no').onclick = () => done(false);
+      $('confirm').onclick = (e) => { if (e.target === $('confirm')) done(false); };
+    });
+  }
+  $('btn-end').onclick = async () => {
+    if (!state) return;
+    const lobby = state.phase === 'lobby';
+    const ok = await askConfirm(lobby ? '確定要解散房間嗎？所有人都會回到首頁。' : '確定要結束遊戲嗎？這局會直接結束並揭曉所有人的身分，不算勝負。', lobby ? '解散' : '結束遊戲');
+    if (ok) send({ type: 'end' });
+  };
+
   // 最後 30 秒的提醒：聊天室一行、上面一條橫幅，到投票就收掉
   function showNotice(text) {
     sysMsg(text); toast(text);
@@ -95,7 +114,8 @@
     const s = state, me = s.you;
     const names = { lobby: '等待中', discuss: '討論', vote: '投票', result: '開票', night: '夜晚', dawn: '天亮', over: '結束' };
     $('phase-name').textContent = names[s.phase] + (s.round ? `｜第 ${s.round} 輪` : '');
-    $('round-label').textContent = s.phase === 'lobby' ? `${s.players.length} 人入座` : `第 ${s.round} 輪`;
+    const aiSlots = s.phase === 'lobby' ? (s.cfg?.ai_count || 0) : 0;
+    $('round-label').textContent = s.phase === 'lobby' ? `${s.players.length} 人入座${aiSlots ? `，${aiSlots} 個 AI 待命` : ''}` : `第 ${s.round} 輪`;
     // 有通道就用公開網址，否則用現在這個（區網）網址；大廳時顯示連結和 QR code
     const invite = s.public_url ? `${s.public_url}/?room=${s.code}` : `${location.origin}/?room=${s.code}`;
     $('invite').classList.toggle('hidden', s.phase !== 'lobby');
@@ -113,6 +133,8 @@
       $('notice').classList.remove('hidden');
     } else if (s.phase !== 'discuss') $('notice').classList.add('hidden');
     $('chat-input').placeholder = lastWordsMe ? '遺言：最後一句話…' : '說點什麼…';
+    $('btn-end').classList.toggle('hidden', !(s.is_host && s.phase !== 'over'));
+    $('btn-end').textContent = s.phase === 'lobby' ? '解散房間' : '結束遊戲';
     $('host-panel').classList.toggle('hidden', !(s.is_host && s.phase === 'lobby'));
     $('wait-hint').classList.toggle('hidden', !(!s.is_host && s.phase === 'lobby'));
     if (s.is_host && s.phase === 'lobby') fillCfg(s.cfg);
@@ -155,9 +177,28 @@
   $('btn-start').onclick = () => { send({ type: 'host_config', cfg: readCfg() }); send({ type: 'start' }); };
 
   function renderSeats() {
-    const box = $('seats'), ps = state.players, n = ps.length;
+    const box = $('seats'), ps = state.players;
+    // 大廳先把設定的 AI 數量畫成機器人占位，房主改數量就同步增減；開局後 AI 真的加進來、座位洗牌，占位就消失
+    const aiSlots = state.phase === 'lobby' ? (state.cfg?.ai_count || 0) : 0;
+    const n = ps.length + aiSlots;
     const W = box.clientWidth || 600, H = box.clientHeight || 400;
     const keep = new Set();
+    const place = (el, i) => {
+      const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+      el.style.left = (W / 2 + Math.cos(a) * W * 0.42) + 'px';
+      el.style.top = (H / 2 + Math.sin(a) * H * 0.40 + 10) + 'px';
+    };
+    for (let j = 0; j < aiSlots; j++) {
+      const key = `ai#${j}`; keep.add(key);
+      let el = box.querySelector(`[data-alias="${key}"]`);
+      if (!el) {
+        el = document.createElement('div'); el.className = 'seat anon ai-slot'; el.dataset.alias = key;
+        el.style.setProperty('--d', `${(j * 0.4).toFixed(1)}s`);
+        el.innerHTML = `<div class="face">${robotSVG()}</div><div class="name">AI</div>`;
+        box.appendChild(el);
+      }
+      place(el, ps.length + j);
+    }
     ps.forEach((p, i) => {
       // 大廳階段伺服器不給名字和頭像，座位用序號當 key；開局後換成化名，整桌一起揭曉
       const anon = !p.alias, key = anon ? `#${i}` : p.alias, isMe = anon ? !!p.me : p.alias === state.you;
@@ -169,9 +210,7 @@
         el.onclick = () => { if (el.classList.contains('votable')) { send({ type: 'vote', target: p.alias, reason: reason() }); markVoted(p.alias); } };
         box.appendChild(el);
       }
-      const a = (i / n) * Math.PI * 2 - Math.PI / 2;
-      el.style.left = (W / 2 + Math.cos(a) * W * 0.42) + 'px';
-      el.style.top = (H / 2 + Math.sin(a) * H * 0.40 + 10) + 'px';
+      place(el, i);
       el.querySelector('.name').textContent = anon ? (isMe ? '你' : '？') : p.alias + (isMe ? '（你）' : '');
       el.classList.toggle('me', isMe);
       el.classList.toggle('dead', !p.alive);
@@ -306,12 +345,13 @@
   }
   function showGameOver(m) {
     const aiLeft = m.players.some(p => p.is_ai && p.alive);
-    const why = m.winner === 'ai' ? 'AI 的數量追平真人了' : aiLeft ? '撐到最後一輪，AI 沒能追平' : 'AI 全部被揪出來了';
-    showOverlay(`win win-${m.winner === 'ai' ? 'ai' : 'humans'}`,
-      `<div class="title">${m.winner === 'ai' ? 'AI 獲勝' : '真人獲勝'}</div><div class="sub ${m.winner === 'ai' ? 'ai' : 'human'}">${why}</div>`, 6000);
+    const title = m.aborted ? '遊戲結束' : m.winner === 'ai' ? 'AI 獲勝' : '真人獲勝';
+    const why = m.aborted ? '房主提早結束了這局' : m.winner === 'ai' ? 'AI 的數量追平真人了' : aiLeft ? '撐到最後一輪，AI 沒能追平' : 'AI 全部被揪出來了';
+    const side = m.aborted ? 'none' : m.winner === 'ai' ? 'ai' : 'humans';
+    showOverlay(`win win-${side}`, `<div class="title">${title}</div><div class="sub ${side === 'ai' ? 'ai' : side === 'humans' ? 'human' : ''}">${why}</div>`, 6000);
     const nick = (a) => { const p = m.players.find(x => x.alias === a); return p && !p.is_ai && p.nickname ? `${a}（${p.nickname}）` : a; };
     const awards = (m.awards || []).map(a => `<div class="award"><span class="award-title">${esc(a.title)}</span>${a.aliases.map(x => esc(nick(x))).join('、')}<span class="award-detail">${esc(a.detail)}</span></div>`).join('');
-    const h = `<div class="big ${m.winner === 'ai' ? 'ai' : 'human'}">${m.winner === 'ai' ? 'AI 獲勝' : '真人獲勝'}</div>` +
+    const h = `<div class="big ${side === 'ai' ? 'ai' : side === 'humans' ? 'human' : ''}">${title}</div>` +
       (awards ? `<div id="awards">${awards}</div>` : '') +
       `<table>${m.players.map(p => `<tr><td>${esc(p.alias)}</td><td class="${p.is_ai ? 'ai' : 'human'}">${p.is_ai ? 'AI ' + esc(p.model) : '真人 ' + esc(p.nickname)}</td><td>${p.alive ? '' : '出局'}</td></tr>`).join('')}</table>` +
       (m.cost_usd != null ? `<div class="muted">本局 API 費用約 $${m.cost_usd}</div>` : '') +
@@ -380,6 +420,14 @@
     const mouth = r(2) > 0.5 ? '<path d="M26 42 Q32 47 38 42" stroke="#5a2d1a" stroke-width="2" fill="none"/>' : '<line x1="27" y1="43" x2="37" y2="43" stroke="#5a2d1a" stroke-width="2"/>';
     const glasses = r(3) > 0.7 ? '<g fill="none" stroke="#222" stroke-width="1.5"><circle cx="25" cy="33" r="5"/><circle cx="39" cy="33" r="5"/><line x1="30" y1="33" x2="34" y2="33"/></g>' : '';
     return `<svg viewBox="0 0 64 64"><rect width="64" height="64" fill="${bg}"/><circle cx="32" cy="34" r="17" fill="${skin}"/><g fill="${hair}">${hairPath}</g><circle cx="25" cy="33" r="2" fill="#222"/><circle cx="39" cy="33" r="2" fill="#222"/>${mouth}${glasses}</svg>`;
+  }
+
+  // 大廳的 AI 占位：簡單的機器人臉，眼睛會眨
+  function robotSVG() {
+    return `<svg viewBox="0 0 64 64"><rect width="64" height="64" fill="#1c2340"/><line x1="32" y1="10" x2="32" y2="18" stroke="#8fa3ff" stroke-width="3"/><circle cx="32" cy="8" r="3" fill="#8fa3ff" class="bulb"/>
+      <rect x="14" y="18" width="36" height="30" rx="8" fill="#4a5a9a"/><rect x="20" y="26" width="24" height="12" rx="4" fill="#0e1430"/>
+      <g class="eyes"><circle cx="26" cy="32" r="3" fill="#8fe3ff"/><circle cx="38" cy="32" r="3" fill="#8fe3ff"/></g>
+      <rect x="22" y="50" width="20" height="6" rx="3" fill="#4a5a9a"/></svg>`;
   }
 
   function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }

@@ -70,6 +70,7 @@ class Room:
         self.last_words_pid: Optional[str] = None    # 現在輪到誰講遺言
         self.vote_history: list[dict] = []           # 每一票，結局頒獎用
         self.winner: Optional[str] = None
+        self.aborted = False       # 房主提早結束
         self.cost_usd = 0.0
         self.log_path = ""
         self.created_at = time.time()
@@ -429,15 +430,29 @@ class Room:
         return [{"alias": p.alias, "is_ai": p.is_ai, "model": p.model, "alive": p.alive,
                  "nickname": "" if p.is_ai else p.nickname} for p in self.players.values()]
 
+    async def abort(self):
+        """房主提早結束：主流程取消，直接進結局揭曉。"""
+        if self.phase in ("lobby", "over"):
+            return
+        if self.task:
+            self.task.cancel()
+            self.task = None
+        self.aborted = True
+        self.winner = "none"
+        self.last_words_pid = None
+        await self._game_over()
+
     async def _game_over(self):
         self.phase = "over"
         for p in self.players.values():
             if p.brain:
                 p.brain.stop()
         awards = self.awards()
-        self.log({"ev": "over", "winner": self.winner, "cost_usd": self.cost_usd, "rounds": self.round, "awards": awards})
+        self.log({"ev": "over", "winner": self.winner, "aborted": self.aborted,
+                  "cost_usd": self.cost_usd, "rounds": self.round, "awards": awards})
         await self.push_state()
-        await self.broadcast({"type": "game_over", "winner": self.winner, "players": self.reveal_all(),
+        await self.broadcast({"type": "game_over", "winner": self.winner, "aborted": self.aborted,
+                              "players": self.reveal_all(),
                               "awards": awards, "rounds": self.round,
                               "cost_usd": round(self.cost_usd, 3),
                               "log_id": os.path.basename(self.log_path),

@@ -24,6 +24,8 @@ input:focus { outline: 2px solid var(--accent); border-color: transparent; }
 button { cursor: pointer; }
 button.primary { background: var(--accent); color: #1a1300; border-color: transparent; font-weight: 600; }
 button.small { padding: 4px 10px; font-size: 13px; }
+button.danger { color: var(--danger); border-color: var(--danger); }
+button.danger:hover { background: rgba(229, 86, 79, .12); }
 button:disabled { opacity: .5; cursor: default; }
 .row { display: flex; gap: 8px; align-items: center; margin: 10px 0; }
 .row input { flex: 1; min-width: 0; }
@@ -74,6 +76,16 @@ input.big-code:not([readonly]):focus { outline: none; border-style: solid; borde
 /* 大廳：全部匿名，灰色問號 */
 .seat.anon .face { background: var(--line); color: var(--muted); font-size: 26px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
 .seat.anon .name { color: var(--muted); }
+/* 大廳的 AI 占位：藍色機器人，上下漂、燈一閃一閃、偶爾眨眼；--d 錯開每個的節奏 */
+.seat.ai-slot { animation: seat-in .5s ease-out, ai-bob 2.6s ease-in-out var(--d, 0s) infinite; }
+.seat.ai-slot .face { border-color: #3b4a8a; box-shadow: 0 0 0 0 rgba(143, 163, 255, .5); animation: ai-glow 2.6s ease-in-out var(--d, 0s) infinite; }
+.seat.ai-slot .name { color: #8fa3ff; font-weight: 600; letter-spacing: 1px; }
+.seat.ai-slot .bulb { animation: ai-blink 1.3s steps(1) var(--d, 0s) infinite; }
+.seat.ai-slot .eyes { transform-origin: 32px 32px; animation: ai-eyes 4s ease-in-out var(--d, 0s) infinite; }
+@keyframes ai-bob { 0%, 100% { margin-top: -40px; } 50% { margin-top: -46px; } }
+@keyframes ai-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(143, 163, 255, .45); } 50% { box-shadow: 0 0 0 8px rgba(143, 163, 255, 0); } }
+@keyframes ai-blink { 0%, 100% { opacity: 1; } 50% { opacity: .2; } }
+@keyframes ai-eyes { 0%, 90%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
 /* 放逐：抖一下、放大、往上飄走，再以灰掉的樣子落回座位 */
 .seat.exiled { animation: exile 2.2s ease-in-out; z-index: 4; }
 @keyframes exile {
@@ -205,6 +217,17 @@ input.big-code:not([readonly]):focus { outline: none; border-style: solid; borde
 #overlay-card.win-ai .title { color: var(--danger); text-shadow: 0 0 24px rgba(229, 86, 79, .6); animation: glitch 1.6s steps(2) infinite; }
 @keyframes glitch { 0%, 100% { transform: none; } 50% { transform: translateX(2px) skewX(-6deg); } }
 @media (max-width: 480px) { #overlay-card { padding: 22px 24px; } #overlay-card .title { font-size: 28px; } #overlay-card.win .title { font-size: 38px; } #overlay-card .sub { font-size: 18px; } }
+
+/* 確認視窗 */
+#confirm { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, .6); animation: fade-in .2s ease-out; }
+#confirm-card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; max-width: 360px; width: 100%; box-shadow: 0 16px 60px #000; animation: card-pop .25s cubic-bezier(.2, 1.4, .4, 1); }
+#confirm-text { font-size: 16px; line-height: 1.6; margin-bottom: 6px; }
+#confirm-card .row { justify-content: flex-end; margin-bottom: 0; }
+#confirm-yes { background: var(--danger); color: #fff; }
+@keyframes card-pop { from { transform: scale(.8); opacity: 0; } to { transform: none; opacity: 1; } }
+#overlay.win-none { --ray: rgba(154, 152, 144, .12); }
+#overlay-card.win-none { border-color: var(--muted); }
+#overlay-card.win-none .title { color: var(--muted); }
 
 #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #000c; color: #fff; padding: 8px 14px; border-radius: 10px; font-size: 14px; z-index: 9; }
 
