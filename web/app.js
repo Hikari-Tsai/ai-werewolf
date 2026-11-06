@@ -2,7 +2,7 @@
 (() => {
   const $ = (id) => document.getElementById(id);
   let ws, state = null, pid = localStorage.getItem('tw_pid') || '', code = '';
-  let typingTimer = null, isTyping = false, countdownTimer = null;
+  let typingTimer = null, isTyping = false, countdownTimer = null, myVote;   // myVote：undefined 還沒投、null 棄票、字串化名
   const bubbles = {}, spectateNotes = [];
 
   // ---------- 連線 ----------
@@ -104,7 +104,11 @@
     $('cost-live').textContent = (s.cost_usd != null && s.phase !== 'lobby') ? ` ｜ $${s.cost_usd.toFixed(3)}` : '';
     $('chat-form').classList.toggle('hidden', !(s.phase === 'discuss' && s.alive));
     $('vote-bar').classList.toggle('hidden', !(s.phase === 'vote' && s.alive));
-    if (s.phase === 'vote') { $('vote-progress').textContent = ''; $('vote-reason').value = ''; $('vote-hint').textContent = '點上面的頭像投票，或'; }
+    if (s.phase === 'vote') {
+      // 重新整理或重連回來：用伺服器記的票還原；開票前都還能改
+      if (myVote === undefined && s.voted) myVote = s.vote || null;
+      if (myVote === undefined) { $('vote-progress').textContent = ''; $('vote-reason').value = ''; $('vote-hint').textContent = '點上面的頭像投票，開票前都還能改，或'; }
+    } else myVote = undefined;
     $('result').classList.toggle('hidden', !(s.phase === 'result' && s.last_result));
     if (s.phase === 'result' && s.last_result) showResult(s.last_result);
     if (s.phase === 'discuss') $('result').classList.add('hidden');
@@ -155,16 +159,17 @@
       el.classList.toggle('dead', !p.alive);
       el.classList.toggle('offline', !p.connected && p.alive);
       el.classList.toggle('typing', !!p.typing && state.phase === 'discuss');
-      el.classList.toggle('votable', state.phase === 'vote' && state.alive && p.alive && p.alias !== state.you && !state.voted);
-      if (state.phase !== 'vote') el.classList.remove('voted');
+      el.classList.toggle('votable', state.phase === 'vote' && state.alive && p.alive && !isMe);
+      el.classList.toggle('voted', state.phase === 'vote' && p.alias === myVote);
     });
     box.querySelectorAll('.seat').forEach(el => { if (!keep.has(el.dataset.alias)) el.remove(); });
   }
   window.addEventListener('resize', () => state && renderSeats());
 
   function markVoted(alias) {
-    document.querySelectorAll('.seat').forEach(el => { el.classList.remove('votable'); el.classList.toggle('voted', el.dataset.alias === alias); });
-    $('vote-hint').textContent = alias ? `你投了 ${alias}` : '你棄票了';
+    myVote = alias;
+    document.querySelectorAll('.seat').forEach(el => el.classList.toggle('voted', el.dataset.alias === alias));
+    $('vote-hint').textContent = (alias ? `你投了 ${alias}` : '你棄票了') + '，開票前都還能改，或';
   }
   const reason = () => $('vote-reason').value.trim();
   $('btn-abstain').onclick = () => { send({ type: 'vote', target: null, reason: reason() }); markVoted(null); };
@@ -230,14 +235,39 @@
     if (r.eliminated) tagSeat({ alias: r.eliminated, is_ai: r.was_ai, nickname: r.nickname });
     if (!first) return;   // 同一輪再收到 room_state（有人斷線之類）不要重播
     sysMsg(r.eliminated ? `${r.eliminated} 被放逐（${r.was_ai ? 'AI' : '真人' + (r.nickname ? ' ' + r.nickname : '')}）` : '本輪平票');
-    if (r.eliminated) exileSeat(r.eliminated);
+    if (r.eliminated) {
+      const p = state.players.find(x => x.alias === r.eliminated);
+      const who = r.was_ai ? (r.model ? `是 AI（${esc(r.model)}）` : '是 AI') : `是真人${r.nickname ? '：' + esc(r.nickname) : ''}`;
+      showOverlay('exile', `<div class="face">${p ? avatarSVG(p.avatar) : ''}</div><div class="title">${esc(r.eliminated)} 被放逐</div>` +
+        `<div class="sub ${r.was_ai ? 'ai' : 'human'}">${who}</div>`, 5000, () => exileSeat(r.eliminated));
+    } else if (r.tie) showOverlay('tie', `<div class="title">平票</div><div class="sub reveal">這輪沒有人被放逐</div>`, 3000);
   }
+  // 蓋板字卡：砸進來、副標題一秒後翻出來、幾秒後淡出；點一下提早關。onClose 在關掉後呼叫
+  let overlayTimer = null, overlayOnClose = null;
+  function showOverlay(cls, html, ms, onClose) {
+    clearTimeout(overlayTimer); overlayOnClose = onClose || null;
+    const ov = $('overlay'), card = $('overlay-card');
+    ov.className = cls; card.className = cls; card.innerHTML = html + '<div class="hint">點一下跳過</div>';
+    const sub = card.querySelector('.sub:not(.reveal)');
+    if (sub) setTimeout(() => sub.classList.add('reveal'), 1100);
+    overlayTimer = setTimeout(hideOverlay, ms);
+  }
+  function hideOverlay() {
+    const ov = $('overlay'); if (ov.classList.contains('hidden') || ov.classList.contains('closing')) return;
+    clearTimeout(overlayTimer); ov.classList.add('closing');
+    setTimeout(() => { ov.className = 'hidden'; const f = overlayOnClose; overlayOnClose = null; if (f) f(); }, 500);
+  }
+  $('overlay').onclick = hideOverlay;
   // 放逐動畫：座位抖一下、放大、往上飄走，再以灰掉的樣子回到位子上
   function exileSeat(alias) {
     const el = document.querySelector(`.seat[data-alias="${alias}"]`); if (!el) return;
     el.classList.add('exiled');   // 不拿掉：拿掉會讓入座動畫重播一次
   }
   function showGameOver(m) {
+    const aiLeft = m.players.some(p => p.is_ai && p.alive);
+    const why = m.winner === 'ai' ? 'AI 的數量追平真人了' : aiLeft ? '撐到最後一輪，AI 沒能追平' : 'AI 全部被揪出來了';
+    showOverlay(`win win-${m.winner === 'ai' ? 'ai' : 'humans'}`,
+      `<div class="title">${m.winner === 'ai' ? 'AI 獲勝' : '真人獲勝'}</div><div class="sub ${m.winner === 'ai' ? 'ai' : 'human'}">${why}</div>`, 6000);
     const h = `<div class="big ${m.winner === 'ai' ? 'ai' : 'human'}">${m.winner === 'ai' ? 'AI 獲勝' : '真人獲勝'}</div>` +
       `<table>${m.players.map(p => `<tr><td>${esc(p.alias)}</td><td class="${p.is_ai ? 'ai' : 'human'}">${p.is_ai ? 'AI ' + esc(p.model) : '真人 ' + esc(p.nickname)}</td><td>${p.alive ? '' : '出局'}</td></tr>`).join('')}</table>` +
       (m.cost_usd != null ? `<div class="muted">本局 API 費用約 $${m.cost_usd}</div>` : '') +

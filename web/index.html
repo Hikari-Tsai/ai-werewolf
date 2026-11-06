@@ -77,7 +77,7 @@
         <button type="submit">送出</button>
       </form>
       <div id="vote-bar" class="hidden">
-        <div class="row"><span id="vote-hint">點上面的頭像投票，或</span> <button id="btn-abstain" class="small">棄票</button>
+        <div class="row"><span id="vote-hint">點上面的頭像投票，開票前都還能改，或</span> <button id="btn-abstain" class="small">棄票</button>
         <span id="vote-progress" class="muted"></span></div>
         <div class="muted reason-hint">投票時請盡量寫一下理由：你是憑哪句話、哪個行為覺得對方是 AI？這些理由會用來讓 AI 演得更像真人，是整個專案最需要的資料。</div>
         <form id="reason-form" class="row"><input id="vote-reason" maxlength="200" placeholder="例如：回太快、太客氣、都不講自己的事"><button type="submit" class="small">記下</button></form>
@@ -92,6 +92,8 @@
     </div>
   </section>
 </div>
+<!-- 蓋板字卡：放逐、平票、勝負。點一下可以提早關掉 -->
+<div id="overlay" class="hidden"><div id="overlay-card"></div></div>
 <div id="toast" class="hidden"></div>
 <script src="/static/app.js"></script>
 </body>

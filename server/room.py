@@ -23,6 +23,7 @@ ALIASES = [
 ]
 
 Listener = Callable[[dict], None]
+VOTE_GRACE = 10   # 全員投完後還能改票的秒數
 
 
 @dataclass
@@ -64,7 +65,6 @@ class Room:
         self.cost_usd = 0.0
         self.log_path = ""
         self.created_at = time.time()
-        self._vote_event = asyncio.Event()
 
     # ---------- 查詢 ----------
     def by_alias(self, alias: str) -> Optional[Player]:
@@ -138,6 +138,7 @@ class Room:
             "is_host": bool(p and p.pid == self.host_pid),
             "alive": bool(p and p.alive),
             "voted": (p.vote is not None) if p else False,
+            "vote": p.vote if p else None,
             "cfg": self.cfg if p and p.pid == self.host_pid else {k: self.cfg[k] for k in ("ai_count", "discuss_seconds", "topics_on")},
             "last_result": self.last_result,
             "winner": self.winner,
@@ -200,14 +201,18 @@ class Room:
         t = self.by_alias(target_alias) if target_alias else None
         if target_alias and (t is None or not t.alive or t.pid == p.pid):
             return
+        changed = p.vote is not None
         p.vote = target_alias or ""
         self.log({"ev": "vote", "round": self.round, "alias": p.alias, "target": p.vote, "is_ai": p.is_ai,
-                  "reason": (reason or "").strip()[:200]})
+                  "reason": (reason or "").strip()[:200], "changed": changed})
         await self.broadcast({"type": "vote_progress",
                               "voted": sum(1 for q in self.alive_players() if q.vote is not None),
                               "total": len(self.alive_players())})
-        if all(q.vote is not None for q in self.alive_players()):
-            self._vote_event.set()
+        # 全員投完不馬上開票：留一小段時間讓人反悔改票，時間本來就快到了就不動
+        if all(q.vote is not None for q in self.alive_players()) and self.phase_ends_at - time.time() > VOTE_GRACE:
+            self.phase_ends_at = time.time() + VOTE_GRACE
+            await self.push_state()
+            await self.broadcast({"type": "notice", "text": f"大家都投了，{VOTE_GRACE} 秒後開票，想改還來得及"})
 
     def vote_reason(self, p: Player, reason: str):
         """投完票之後補的理由，演化最需要的資料。"""
@@ -280,12 +285,10 @@ class Room:
             await asyncio.sleep(warn)
 
     async def _vote_phase(self):
-        self._vote_event.clear()
         await self._set_phase("vote", self.cfg["vote_seconds"])
-        try:
-            await asyncio.wait_for(self._vote_event.wait(), timeout=self.cfg["vote_seconds"])
-        except asyncio.TimeoutError:
-            pass
+        # 投票期間都能改票；全員投完 cast_vote 會把結束時間提前
+        while (left := self.phase_ends_at - time.time()) > 0:
+            await asyncio.sleep(min(left, 0.5))
 
     async def _result_phase(self):
         tally: dict[str, int] = {}

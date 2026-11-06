@@ -59,6 +59,8 @@ input.big-code:not([readonly]):focus { outline: none; border-style: solid; borde
 .topic { background: #2a2416; border: 1px solid #5a4a1e; color: #ffd98a; border-radius: 12px; padding: 8px 12px; margin: 8px 0; font-size: 15px; }
 
 #table { position: relative; width: 100%; aspect-ratio: 1.45; margin: 8px auto 48px; }
+/* 座位的容器要跟桌子一樣大，座位才會照桌子的實際尺寸排；之前高度是 0，手機上下面的座位會掉到桌子外面 */
+#seats { position: absolute; inset: 0; }
 #table-center { position: absolute; left: 50%; top: 50%; width: 46%; height: 52%; transform: translate(-50%, -50%);
   border-radius: 50%; background: #3a2d20; border: 6px solid #55402c; display: flex; align-items: center; justify-content: center; color: #c9a77a; font-size: 14px; }
 .seat { position: absolute; width: 72px; margin-left: -36px; margin-top: -40px; text-align: center; transition: transform .2s, left .6s ease, top .6s ease; animation: seat-in .5s ease-out; }
@@ -133,10 +135,44 @@ input.big-code:not([readonly]):focus { outline: none; border-style: solid; borde
 #spectate-notes div { margin: 2px 0; color: var(--muted); }
 #spectate-notes b { color: var(--danger); }
 
+/* 蓋板字卡 */
+#overlay { position: fixed; inset: 0; z-index: 8; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, .74); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); overflow: hidden; cursor: pointer; animation: fade-in .3s ease-out; }
+#overlay.closing { animation: fade-out .5s ease-in forwards; }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fade-out { to { opacity: 0; } }
+/* 勝負時背景有一圈慢慢轉的光芒 */
+#overlay.win::before { content: ''; position: absolute; left: 50%; top: 50%; width: 300vmax; height: 300vmax; margin: -150vmax 0 0 -150vmax; background: repeating-conic-gradient(var(--ray) 0 10deg, transparent 10deg 30deg); animation: spin 24s linear infinite; }
+#overlay.win-humans { --ray: rgba(242, 181, 68, .16); }
+#overlay.win-ai { --ray: rgba(229, 86, 79, .16); }
+@keyframes spin { to { transform: rotate(360deg); } }
+#overlay-card { position: relative; text-align: center; padding: 28px 40px; border-radius: 24px; background: var(--card); border: 2px solid var(--line); box-shadow: 0 24px 80px #000; max-width: 92vw; animation: card-slam .7s cubic-bezier(.2, 1.4, .4, 1); }
+@keyframes card-slam { from { transform: scale(2.4) rotate(-8deg); opacity: 0; } 55% { transform: scale(.94) rotate(1.5deg); opacity: 1; } to { transform: none; } }
+#overlay-card .face { width: 96px; height: 96px; margin: 0 auto 12px; border-radius: 50%; overflow: hidden; border: 4px solid var(--line); background: var(--bg); }
+#overlay-card .face svg { width: 100%; height: 100%; display: block; }
+#overlay-card .title { font-size: 36px; font-weight: 800; letter-spacing: 2px; line-height: 1.2; }
+#overlay-card .sub { font-size: 22px; font-weight: 700; margin-top: 10px; opacity: 0; transform: scale(1.8); }
+#overlay-card .sub.reveal { animation: reveal-pop .5s cubic-bezier(.2, 1.4, .4, 1) forwards; }
+@keyframes reveal-pop { to { opacity: 1; transform: none; } }
+#overlay-card .ai { color: var(--danger); } #overlay-card .human { color: var(--ok); }
+#overlay-card .hint { font-size: 13px; color: var(--muted); margin-top: 14px; }
+#overlay-card.exile { border-color: var(--danger); box-shadow: 0 0 0 6px rgba(229, 86, 79, .18), 0 24px 80px #000; }
+#overlay-card.exile .title { color: var(--danger); }
+#overlay-card.exile .face { animation: face-shake .6s ease-in-out .7s; }
+@keyframes face-shake { 0%, 100% { transform: none; } 20%, 60% { transform: rotate(-10deg); } 40%, 80% { transform: rotate(10deg); } }
+#overlay-card.tie .title { color: var(--muted); }
+#overlay-card.win .title { font-size: 48px; }
+#overlay-card.win-humans { border-color: var(--accent); box-shadow: 0 0 60px rgba(242, 181, 68, .35), 0 24px 80px #000; }
+#overlay-card.win-humans .title { color: var(--accent); text-shadow: 0 0 24px rgba(242, 181, 68, .6); }
+#overlay-card.win-ai { border-color: var(--danger); box-shadow: 0 0 60px rgba(229, 86, 79, .35), 0 24px 80px #000; }
+#overlay-card.win-ai .title { color: var(--danger); text-shadow: 0 0 24px rgba(229, 86, 79, .6); animation: glitch 1.6s steps(2) infinite; }
+@keyframes glitch { 0%, 100% { transform: none; } 50% { transform: translateX(2px) skewX(-6deg); } }
+@media (max-width: 480px) { #overlay-card { padding: 22px 24px; } #overlay-card .title { font-size: 28px; } #overlay-card.win .title { font-size: 38px; } #overlay-card .sub { font-size: 18px; } }
+
 #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #000c; color: #fff; padding: 8px 14px; border-radius: 10px; font-size: 14px; z-index: 9; }
 
 @media (max-width: 480px) {
   .grid { grid-template-columns: 1fr; }
+  #table { aspect-ratio: 1.15; }   /* 窄螢幕桌子高一點，座位才不會擠進桌面 */
   #chat { height: 32vh; }
   .seat { width: 60px; margin-left: -30px; }
   .seat .face { width: 46px; height: 46px; }

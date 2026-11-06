@@ -79,11 +79,20 @@ def new_code() -> str:
 CODE_RE = re.compile(r"[A-Z0-9]{2,8}")
 
 
+def evict_if_over(code: str):
+    """已經結束的房間不佔房號：有人要用同一個房號就把舊房收掉，還留在結局畫面的人不受影響。"""
+    r = rooms.get(code)
+    if r and r.phase == "over":
+        r.stop()
+        rooms.pop(code, None)
+
+
 def check_code(raw: str) -> tuple[str, str]:
     """自訂房號：2 到 8 個英數字。回傳 (正規化後的房號, 錯誤訊息)。"""
     code = (raw or "").strip().upper()
     if not CODE_RE.fullmatch(code):
         return code, "房號要 2 到 8 個英文或數字"
+    evict_if_over(code)
     if code in rooms:
         return code, "這個房號已經有人用了，換一個"
     return code, ""
@@ -124,6 +133,9 @@ async def ws_endpoint(ws: WebSocket):
             if t == "join":
                 code = (m.get("code") or "").upper().strip()
                 r = rooms.get(code)
+                if r and r.phase == "over" and not (m.get("pid") in r.players):
+                    await err(ws, "這間房已經結束了，可以用同一個房號開新房")
+                    continue
                 if not r:
                     await err(ws, "找不到這個房號")
                     continue
@@ -209,6 +221,7 @@ async def ws_endpoint(ws: WebSocket):
             room.remove_player(me)
             if not any(p.connected for p in room.players.values() if not p.is_ai):
                 room.stop()
-                rooms.pop(room.code, None)
+                if rooms.get(room.code) is room:   # 房號可能已經被新房拿走
+                    rooms.pop(room.code, None)
             else:
                 await room.push_state()
