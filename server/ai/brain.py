@@ -95,6 +95,8 @@ class AIBrain:
                 self.first_delay = min(12.0, random.uniform(2, 9) / max(0.6, self.persona.talkativeness))
             elif self.phase == "vote" and self.p.alive:
                 asyncio.create_task(self._vote(ev.get("seconds", 30)))
+            elif self.phase == "result" and ev.get("eliminated") == self.p.alias:
+                asyncio.create_task(self._last_words())
         elif t == "notice":
             self.last_call = True
         elif t == "chat" and ev["alias"] != self.p.alias:
@@ -173,7 +175,8 @@ class AIBrain:
 
     async def _llm(self, user: str, max_tokens: int = 400) -> dict:
         res = await router.complete(self.provider, self.model,
-                                    prompts.system_prompt(self.persona, self.p.alias, self.allies, self.strategy),
+                                    prompts.system_prompt(self.persona, self.p.alias, self.allies, self.strategy,
+                                                          night_kill=self.room.cfg["night_kill"]),
                                     user, max_tokens=max_tokens, strategy=self.room.cfg["model_strategy"])
         self.room.cost_usd += res.cost_usd
         if res.model != self.model:
@@ -218,7 +221,7 @@ class AIBrain:
         for i, t in enumerate(passed):
             if i:
                 await asyncio.sleep(timing.between_messages())
-            if self.phase != "discuss" or not self.p.alive:
+            if not self.room.can_talk(self.p):
                 return
             await self._type_and_send(t)
 
@@ -243,13 +246,49 @@ class AIBrain:
                 await self.room.set_typing(self.p, False)
                 self.pending_mention = True
                 return
-            if self.phase != "discuss" or not self.p.alive:
+            if not self.room.can_talk(self.p):
                 await self.room.set_typing(self.p, False)
                 return
             await self.room.post_chat(self.p, t)
             self.last_spoke = time.time()
             self.spoke_this_round += 1
             self.last_seen_idx = len(self.room.chat)
+
+    # ---------- 遺言 ----------
+    async def _last_words(self):
+        """被投出去了：字卡播完後講一兩句，像真人一樣喊冤或酸人。"""
+        await asyncio.sleep(random.uniform(5, 8))
+        ctx = self._ctx()
+        ctx["history"] = self._history(30)
+        msgs = []
+        try:
+            data = await self._llm(prompts.last_words_prompt(ctx), 250)
+            msgs = [str(s) for s in (data.get("say") or []) if str(s).strip()][:2]
+        except Exception as e:
+            log.warning("AI %s 遺言失敗：%r", self.p.alias, e)
+        passed = [t for t, reasons in (style.check(m) for m in msgs) if not reasons]
+        if not passed:
+            passed = [random.choice(["靠 我是真人欸", "蛤 投我？", "好喔 你們等著後悔", "不是我啦 = ="])]
+        for i, t in enumerate(passed):
+            if i:
+                await asyncio.sleep(timing.between_messages())
+            if not self.room.can_talk(self.p):
+                return
+            await self._type_and_send(t)
+
+    # ---------- 夜襲 ----------
+    async def pick_victim(self, candidates: list[str]) -> tuple[Optional[str], str]:
+        """夜晚挑一個人帶走。回傳 (化名或 None, 理由)。"""
+        allies = self.allies
+        ctx = {
+            "alias": self.p.alias, "round": self.room.round, "note": self.note,
+            "candidates": "、".join(candidates), "history": self._history(60),
+            "ally_hint": f"（{'、'.join(allies)} 是你的同伴，這是你們一起決定的）" if allies else "",
+        }
+        data = await self._llm(prompts.night_prompt(ctx), 300)   # 中文理由很吃 token，太小 JSON 會被截斷
+        v = data.get("take")
+        why = str(data.get("why") or "")
+        return (v if v in candidates else None), why
 
     # ---------- 投票 ----------
     async def _vote(self, seconds: float):

@@ -4,11 +4,13 @@
 > 那你一定要來試試看，能不能在遊戲裡放逐所有 AI，讓人類文明重新回到有序的年代。
 
 一群人在聊天室裡純文字閒聊，其中幾個是 AI 在偽裝。每輪討論後投票放逐一人，把 AI 全部找出來就贏；
-AI 數量追平真人就輸。沒有角色、沒有夜晚，重點全在「AI 怎麼裝人」。
+AI 數量追平真人就輸。沒有預言家、女巫這些角色，重點全在「AI 怎麼裝人」。
+但有狼人殺的夜晚：只要還有 AI 活著，每輪放逐之後 AI 會再帶走一個真人（AI 自己挑，房主可關），
+所以真人不能慢慢耗。被放逐的人有 20 秒遺言，AI 也得演。結局頒發「神探」「最像 AI 的真人」「影帝 AI」。
 
 - 多位真人用手機或電腦瀏覽器加入，房主設定 AI 數量、秒數、模型
 - AI 用 Claude 與 OpenAI 的模型，依人設、人類打字節奏、台灣用語過濾來偽裝
-- 每局紀錄存成 JSONL，可分享回 GitHub，用來演化 AI 的人設
+- 每局紀錄存成 JSONL，可分享回 GitHub（[開一個 Issue 貼上就好](https://github.com/Hikari-Tsai/ai-werewolf/issues/new?template=upload-log.yml)），用來演化 AI 的人設
 
 ## 遊戲畫面
 
@@ -73,7 +75,7 @@ AI 用的是伺服器 `.env` 裡的 key，每間房有 `budget_usd` 上限（預
 
 ## 分享對局紀錄、演化 AI
 
-1. 在 `.env` 填 `GITHUB_REPO=owner/repo`，遊戲結束畫面就會有「上傳到 GitHub」按鈕，會開一個預填好的 Issue。
+1. 遊戲結束畫面按「上傳到 GitHub」，會開一個預填好的 Issue；也可以直接開 <https://github.com/Hikari-Tsai/ai-werewolf/issues/new?template=upload-log.yml>，把「下載紀錄」拿到的檔案內容貼進去。自己 fork 的話在 `.env` 填 `GITHUB_REPO=owner/repo` 改成開你的 repo。
 2. `ingest-log` workflow 驗證格式、遮掉電話與 Email 等個資，開 PR 把紀錄放進 `data/games/`。
 3. `evolve` workflow 每週（或手動）用這些紀錄校準裁判，讓帶不同策略的 AI 互相對戰，演化出 `genomes/best.json`。
 4. 合併 PR 後，遊戲開局會從 `best.json` 抽策略給 AI。

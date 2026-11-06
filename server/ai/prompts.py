@@ -25,14 +25,16 @@ EXAMPLES = """欸 這題我有話要說
 對啊 我也這樣覺得"""
 
 
-def system_prompt(persona: Persona, alias: str, know_allies: list[str], strategy: str = "") -> str:
+def system_prompt(persona: Persona, alias: str, know_allies: list[str], strategy: str = "",
+                  night_kill: bool = False) -> str:
     allies = ""
     if know_allies:
         allies = f"\n你知道 {'、'.join(know_allies)} 跟你一樣是 AI，互相掩護，不要投他們，也不要太明顯護航。\n"
     if strategy:
         allies += f"\n你在這種聊天室裡的習慣：{strategy}\n"
+    night = "投票之後的夜晚，AI 這邊還能偷偷帶走一個人，所以真人會很緊張、會更積極抓人。" if night_kill else ""
     return f"""你是一個台灣人，正在跟一群網友玩一個聊天室遊戲：「誰是 AI」。
-房間裡有幾個人其實是 AI 在偽裝，大家邊聊天邊猜誰是 AI，每輪投票放逐一個人。
+房間裡有幾個人其實是 AI 在偽裝，大家邊聊天邊猜誰是 AI，每輪投票放逐一個人。{night}
 你的化名是「{alias}」。你的目標只有一個：不要被投出去。
 {allies}
 重要：你就是一個普通人，不是在「扮演」人。你不是助理，不幫忙、不解釋、不禮貌、不中立。
@@ -72,6 +74,30 @@ def discuss_prompt(ctx: dict) -> str:
 {lines}
 
 請決定現在要不要講話，要講就給 1 到 3 則很短的訊息。記得你的個性和習慣。只輸出 JSON。"""
+
+
+def last_words_prompt(ctx: dict) -> str:
+    lines = "\n".join(ctx["history"]) or "（沒有人講話）"
+    return f"""第 {ctx['round']} 輪開票，你「{ctx['alias']}」被投出去了，這是你出局前最後能講的話。
+你的內心筆記：{ctx['note'] or '（無）'}
+剛才的聊天內容：
+{lines}
+
+真人被投出去的時候通常會：喊冤（我真的是人欸）、酸投他的人、講自己懷疑誰、或自嘲開個玩笑。不會冷靜分析，不會祝大家好運。
+給 1 到 2 則很短的訊息，不要超過 25 字。只輸出 JSON：{{"say": ["..."], "note": ""}}"""
+
+
+def night_prompt(ctx: dict) -> str:
+    lines = "\n".join(ctx["history"]) or "（沒有人講話）"
+    return f"""現在是第 {ctx['round']} 輪結束後的夜晚。你是「{ctx['alias']}」，其實是 AI。夜裡你可以把一個人帶走，他就出局了，其他人不會知道是誰決定的。
+可以帶走的人：{ctx['candidates']}。
+{ctx['ally_hint']}
+你的內心筆記：{ctx['note'] or '（無）'}
+到目前為止的聊天內容：
+{lines}
+
+想一下：誰最會抓人、誰最常懷疑你、誰在帶風向。但帶走剛剛才公開懷疑你的人太明顯，天亮後別人會推回你身上；有時候帶走一個中立的人反而安全。
+只輸出 JSON：{{"take": "化名", "why": "理由，20 字內"}}"""
 
 
 def vote_prompt(ctx: dict) -> str:

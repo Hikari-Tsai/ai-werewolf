@@ -30,6 +30,11 @@ button:disabled { opacity: .5; cursor: default; }
 .error { color: var(--danger); min-height: 1.5em; }
 .muted { color: var(--muted); font-size: 13px; }
 .panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin: 12px 0; }
+/* 首頁的兩個入口：標題加一句說明 */
+.entry-panel { margin: 16px 0; padding: 14px 16px 10px; }
+.entry-panel h2 { margin: 0 0 4px; font-size: 18px; }
+.entry-panel p { margin: 0 0 6px; font-size: 14px; color: var(--muted); }
+.entry-panel .row { margin: 8px 0 4px; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
 label.check { display: flex; align-items: center; gap: 8px; }
 /* 設定旁的 ? 圈圈，滑鼠移上去或手機點一下顯示說明 */
@@ -82,6 +87,15 @@ input.big-code:not([readonly]):focus { outline: none; border-style: solid; borde
   100% { transform: none; opacity: .4; }
 }
 .seat.dead .face::after { content: '✕'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--danger); font-size: 30px; font-weight: 700; text-shadow: 0 0 6px #000; }
+/* 夜裡被帶走的：月亮取代叉叉，動畫是整個人暗掉、縮小 */
+.seat.dead.night-taken .face::after { content: '🌙'; font-size: 24px; }
+.seat.taken { animation: taken 2s ease-in-out; z-index: 4; }
+@keyframes taken {
+  0% { transform: none; opacity: 1; filter: none; }
+  40% { transform: scale(1.15); opacity: 1; filter: brightness(.3); }
+  70% { transform: scale(.5); opacity: 0; filter: brightness(0); }
+  100% { transform: none; opacity: .4; }
+}
 .seat .face svg { width: 100%; height: 100%; display: block; }
 .seat .name { font-size: 12px; margin-top: 2px; white-space: nowrap; }
 .seat.me .name { color: var(--accent); font-weight: 600; }
@@ -109,6 +123,9 @@ input.big-code:not([readonly]):focus { outline: none; border-style: solid; borde
 .msg .text { background: rgba(255, 255, 255, .06); border-radius: 12px; padding: 5px 10px; font-size: 15px; line-height: 1.4; }
 .msg.me .who { color: var(--ok); }
 .msg.me .text { background: rgba(94, 193, 140, .14); }
+/* 遺言：紅色標籤、虛線框 */
+.msg .lw { flex: none; font-size: 11px; color: var(--danger); border: 1px solid var(--danger); border-radius: 6px; padding: 0 4px; }
+.msg.lastwords .text { border: 1px dashed rgba(229, 86, 79, .6); }
 .msg.sys { color: var(--muted); font-size: 12px; justify-content: center; }
 #typing-bar { min-height: 1.4em; padding: 2px 6px; font-size: 12px; }
 #chat-form { display: flex; gap: 8px; }
@@ -123,12 +140,18 @@ input.big-code:not([readonly]):focus { outline: none; border-style: solid; borde
 .reason-hint { font-size: 12px; line-height: 1.5; padding: 6px 8px; margin: 4px 0; background: rgba(242, 181, 68, .08); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; }
 #upload-box { text-align: left; font-size: 13px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
 #upload-box .row { justify-content: center; }
+#upload-box a { word-break: break-all; }
 
 #result { text-align: center; font-size: 17px; }
 #result .big { font-size: 22px; font-weight: 700; margin: 4px 0; }
 #result .ai { color: var(--danger); } #result .human { color: var(--ok); }
 #result table { margin: 8px auto; font-size: 13px; border-collapse: collapse; }
 #result td { padding: 2px 10px; }
+/* 結局頒獎 */
+#awards { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 10px 0; }
+.award { background: rgba(242, 181, 68, .1); border: 1px solid rgba(242, 181, 68, .4); border-radius: 12px; padding: 6px 12px; font-size: 14px; text-align: left; }
+.award .award-title { display: block; color: var(--accent); font-weight: 700; font-size: 12px; letter-spacing: 1px; }
+.award .award-detail { color: var(--muted); font-size: 12px; margin-left: 6px; }
 
 #spectate-list { font-size: 13px; display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 8px; }
 #spectate-notes { font-size: 13px; max-height: 160px; overflow-y: auto; }
@@ -160,6 +183,21 @@ input.big-code:not([readonly]):focus { outline: none; border-style: solid; borde
 #overlay-card.exile .face { animation: face-shake .6s ease-in-out .7s; }
 @keyframes face-shake { 0%, 100% { transform: none; } 20%, 60% { transform: rotate(-10deg); } 40%, 80% { transform: rotate(10deg); } }
 #overlay-card.tie .title { color: var(--muted); }
+/* 夜晚：深藍、月亮慢慢晃；天亮：金邊，副標是紅字 */
+#overlay.night { background: rgba(3, 4, 14, .92); }
+#overlay-card.night { background: #0d1024; border-color: #2a2f5a; box-shadow: 0 0 80px rgba(80, 100, 255, .18), 0 24px 80px #000; }
+#overlay-card.night .title { color: #b9c2ff; }
+#overlay-card.night .sub { color: var(--muted); font-size: 18px; font-weight: 500; }
+#overlay-card .moon { font-size: 64px; line-height: 1; margin-bottom: 8px; display: inline-block; animation: moon-sway 3s ease-in-out infinite; }
+@keyframes moon-sway { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(8deg); } }
+#overlay-card.night .dots::after { content: ''; animation: dots 1.5s steps(4) infinite; }
+@keyframes dots { to { content: '…'; } }
+#overlay.dawn { background: rgba(40, 30, 10, .8); }
+#overlay-card.dawn { border-color: var(--accent); box-shadow: 0 0 60px rgba(242, 181, 68, .25), 0 24px 80px #000; }
+#overlay-card.dawn .title { color: var(--accent); }
+#overlay-card.dawn .sub { color: var(--danger); }
+#overlay-card.dawn .face { animation: face-sink 1.2s ease-in .9s forwards; }
+@keyframes face-sink { to { filter: grayscale(1) brightness(.5); transform: scale(.9); } }
 #overlay-card.win .title { font-size: 48px; }
 #overlay-card.win-humans { border-color: var(--accent); box-shadow: 0 0 60px rgba(242, 181, 68, .35), 0 24px 80px #000; }
 #overlay-card.win-humans .title { color: var(--accent); text-shadow: 0 0 24px rgba(242, 181, 68, .6); }

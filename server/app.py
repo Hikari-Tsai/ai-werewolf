@@ -158,7 +158,7 @@ async def ws_endpoint(ws: WebSocket):
                 await room.push_state()
                 if room.phase != "lobby":
                     await ws.send_text(json.dumps({"type": "history", "chat": room.chat[-200:]}, ensure_ascii=False))
-                    if not me.alive:
+                    if not me.alive and (room.cfg["reveal_on_exit"] or room.phase == "over"):
                         await ws.send_text(json.dumps({"type": "spectate_init", "players": room.reveal_all()}, ensure_ascii=False))
                 continue
             if room is None or me is None:

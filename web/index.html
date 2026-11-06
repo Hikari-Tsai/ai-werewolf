@@ -13,15 +13,25 @@
   <section id="screen-entry" class="screen">
     <h1 id="entry-title">誰是 AI？</h1>
     <p id="entry-sub" class="sub">一群人在聊天室裡聊天，其中幾個是 AI。每輪投票放逐一人，把 AI 全部找出來。</p>
-    <label>你的暱稱（只有你自己看得到）<input id="nickname" maxlength="12" placeholder="例如：小明"></label>
-    <div class="row">
-      <input id="new-code" maxlength="8" placeholder="自訂房號（選填，2 到 8 碼英數字）" autocapitalize="characters">
-      <button id="btn-create" class="primary">開新房間</button>
+    <label>你的暱稱（遊戲中大家看到的是隨機代號，你出局或遊戲結束時才會公開）<input id="nickname" maxlength="12" placeholder="例如：小明"></label>
+
+    <div id="entry-create" class="panel entry-panel">
+      <h2>開新房間</h2>
+      <p>你當房主：決定要混進幾個 AI、每輪聊多久，然後把房號或 QR code 給朋友。房號已經幫你抽好一組，不喜歡可以直接改（2 到 8 碼英數字）。</p>
+      <div class="row">
+        <input id="new-code" maxlength="8" placeholder="房號" autocapitalize="characters">
+        <button id="btn-create" class="primary">開新房間</button>
+      </div>
     </div>
-    <div class="row">
-      <input id="code" maxlength="8" placeholder="房號" autocapitalize="characters">
-      <input id="password" placeholder="密碼（有的話）">
-      <button id="btn-join">加入</button>
+
+    <div id="entry-join" class="panel entry-panel">
+      <h2>加入房間</h2>
+      <p id="entry-join-hint">朋友已經開好房了？輸入他給你的房號，房間有設密碼的話也要填。</p>
+      <div class="row">
+        <input id="code" maxlength="8" placeholder="房號" autocapitalize="characters">
+        <input id="password" placeholder="密碼（有的話）">
+        <button id="btn-join" class="primary">加入</button>
+      </div>
     </div>
     <p id="entry-error" class="error"></p>
   </section>
@@ -52,11 +62,13 @@
         <label>AI 數量 <span class="help" data-tip="混進房間的 AI 有幾個。AI 數量追平真人就 AI 獲勝，所以建議比真人少。">?</span><input id="cfg-ai_count" type="number" min="0" max="8"></label>
         <label>討論秒數 <span class="help" data-tip="每輪自由聊天的時間。太短 AI 來不及開口，建議 120 秒以上。">?</span><input id="cfg-discuss_seconds" type="number" min="30" max="600" step="10"></label>
         <label>投票秒數 <span class="help" data-tip="投票階段的時間。全部人投完會提早結束，沒投的算棄票。">?</span><input id="cfg-vote_seconds" type="number" min="10" max="120" step="5"></label>
-        <label>最多幾輪 <span class="help" data-tip="到這一輪還沒分出勝負就算真人贏，因為 AI 沒能撐到追平。">?</span><input id="cfg-max_rounds" type="number" min="1" max="20"></label>
+        <label>最多幾輪 <span class="help" data-tip="到這一輪還沒分出勝負就算真人贏，因為 AI 沒能撐到追平。開了夜襲通常撐不到這麼多輪。">?</span><input id="cfg-max_rounds" type="number" min="1" max="20"></label>
         <label>模型 <span class="help" data-tip="自動混用：AI 平均分配到 Claude 和 OpenAI，各用不同型號，講話風格會不一樣。只用一家就全部同家。">?</span><select id="cfg-model_strategy"><option value="auto">自動混用</option><option value="anthropic">只用 Claude</option><option value="openai">只用 OpenAI</option></select></label>
         <label>房間密碼 <span class="help" data-tip="設了之後，拿到連結的人還要輸密碼才能加入。公開網址給不熟的人時建議設。">?</span><input id="cfg-password" placeholder="留空就不用"></label>
         <label class="check"><input id="cfg-topics_on" type="checkbox"> 每輪給話題 <span class="help" data-tip="每輪隨機給一個台灣生活話題（例如最雷的店、小時候的綽號），刻意挑真人好答、AI 容易露餡的。關掉就純自由聊。">?</span></label>
         <label class="check"><input id="cfg-ai_know_each_other" type="checkbox"> AI 互相知道身分 <span class="help" data-tip="像狼人殺的狼隊：AI 知道哪些人也是 AI，投票不會投同伴、會分散票數、不太明顯地幫同伴講話。關掉時每個 AI 各自為政，也可能互投。開了難度明顯變高。">?</span></label>
+        <label class="check"><input id="cfg-night_kill" type="checkbox"> AI 夜襲 <span class="help" data-tip="像狼人殺的夜晚：只要還有 AI 活著，每輪放逐之後 AI 會再帶走一個真人，由 AI 自己挑。沒開的話 AI 只能等真人投錯，真人棄票也會贏。真人只有 3 個以下建議關掉，不然投錯一次就輸。">?</span></label>
+        <label class="check"><input id="cfg-reveal_on_exit" type="checkbox"> 出局就揭曉身分 <span class="help" data-tip="開著：被放逐或被帶走的人馬上知道誰是 AI，還看得到 AI 的內心小抄。關掉：要到結局才揭曉，出局的人繼續猜；同一個房間裡玩比較不會漏口風。">?</span></label>
       </div>
       <div class="row">
         <button id="btn-start" class="primary">開始遊戲</button>

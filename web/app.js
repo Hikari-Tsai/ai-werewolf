@@ -21,11 +21,19 @@
   if (invitedRoom) {
     // 從邀請連結進來：只能加入這間房，不給開新房
     $('code').value = invitedRoom;
-    $('btn-create').closest('.row').classList.add('hidden');
+    $('entry-create').classList.add('hidden');
     $('entry-title').textContent = `加入房間 ${invitedRoom}`;
-    $('entry-sub').textContent = '取個暱稱就能進房，暱稱只有你自己看得到。';
+    $('entry-sub').textContent = '取個暱稱就能進房。遊戲中大家看到的是隨機代號，暱稱要到你出局或遊戲結束才會公開。';
+    $('entry-join').querySelector('h2').classList.add('hidden');
+    $('entry-join-hint').textContent = '房號已經幫你填好了，房間有設密碼的話填一下，再按加入。';
   }
   $('nickname').value = localStorage.getItem('tw_nick') || '';
+  // 房號欄先填一組隨機四碼大寫英文（避開像 0 和 1 的 O、I），想改就直接改
+  function randomCode() {
+    const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    return Array.from({ length: 4 }, () => letters[Math.floor(Math.random() * letters.length)]).join('');
+  }
+  $('new-code').value = randomCode();
 
   $('btn-create').onclick = () => enter({ type: 'create', nickname: nick(), code: $('new-code').value.trim().toUpperCase() });
   $('btn-join').onclick = () => enter({ type: 'join', code: $('code').value.trim().toUpperCase(), nickname: nick(), password: $('password').value, pid });
@@ -54,6 +62,8 @@
       case 'error':
         if (!state) {
           $('entry-error').textContent = m.text;
+          // 預填的房號撞到別人的房：換一組新的
+          if (/已經有人用了/.test(m.text) && $('new-code').value) $('new-code').value = randomCode();
           // 邀請的房間已經不在了，放開讓他回首頁開新房
           if (invitedRoom && /找不到/.test(m.text)) $('entry-error').innerHTML += ' <a href="/">回首頁</a>';
         } else toast(m.text);
@@ -83,7 +93,7 @@
   // ---------- 畫面 ----------
   function render() {
     const s = state, me = s.you;
-    const names = { lobby: '等待中', discuss: '討論', vote: '投票', result: '開票', over: '結束' };
+    const names = { lobby: '等待中', discuss: '討論', vote: '投票', result: '開票', night: '夜晚', dawn: '天亮', over: '結束' };
     $('phase-name').textContent = names[s.phase] + (s.round ? `｜第 ${s.round} 輪` : '');
     $('round-label').textContent = s.phase === 'lobby' ? `${s.players.length} 人入座` : `第 ${s.round} 輪`;
     // 有通道就用公開網址，否則用現在這個（區網）網址；大廳時顯示連結和 QR code
@@ -96,13 +106,19 @@
     $('btn-copy').onclick = () => { navigator.clipboard?.writeText(invite); toast('已複製邀請連結'); };
     $('topic').classList.toggle('hidden', !s.topic || s.phase === 'lobby');
     $('topic').textContent = s.topic ? `本輪話題：${s.topic}` : '';
-    if (s.phase !== 'discuss') $('notice').classList.add('hidden');
+    // 遺言時間：橫幅提醒大家聽他講完；輪到自己就開聊天欄
+    const lastWordsMe = s.phase === 'result' && s.last_words && s.last_words === s.you;
+    if (s.phase === 'result' && s.last_words) {
+      $('notice').textContent = lastWordsMe ? '你被放逐了，留幾句遺言吧' : `${s.last_words} 的遺言時間`;
+      $('notice').classList.remove('hidden');
+    } else if (s.phase !== 'discuss') $('notice').classList.add('hidden');
+    $('chat-input').placeholder = lastWordsMe ? '遺言：最後一句話…' : '說點什麼…';
     $('host-panel').classList.toggle('hidden', !(s.is_host && s.phase === 'lobby'));
     $('wait-hint').classList.toggle('hidden', !(!s.is_host && s.phase === 'lobby'));
     if (s.is_host && s.phase === 'lobby') fillCfg(s.cfg);
     // 房主在遊戲進行中看得到即時費用；大廳還沒花錢就不顯示
     $('cost-live').textContent = (s.cost_usd != null && s.phase !== 'lobby') ? ` ｜ $${s.cost_usd.toFixed(3)}` : '';
-    $('chat-form').classList.toggle('hidden', !(s.phase === 'discuss' && s.alive));
+    $('chat-form').classList.toggle('hidden', !((s.phase === 'discuss' && s.alive) || lastWordsMe));
     $('vote-bar').classList.toggle('hidden', !(s.phase === 'vote' && s.alive));
     if (s.phase === 'vote') {
       // 重新整理或重連回來：用伺服器記的票還原；開票前都還能改
@@ -112,22 +128,24 @@
     $('result').classList.toggle('hidden', !(s.phase === 'result' && s.last_result));
     if (s.phase === 'result' && s.last_result) showResult(s.last_result);
     if (s.phase === 'discuss') $('result').classList.add('hidden');
+    if (s.phase === 'night') showNight(s);
+    if (s.phase === 'dawn' && s.last_night) showDawn(s.last_night);
     startCountdown(s.ends_at, s.server_time);
     renderSeats();
-    if (s.phase !== 'discuss') $('typing-bar').textContent = '';
+    if (s.phase !== 'discuss' && s.phase !== 'result') $('typing-bar').textContent = '';
   }
 
   function fillCfg(c) {
     for (const k of ['ai_count', 'discuss_seconds', 'vote_seconds', 'max_rounds', 'model_strategy', 'password']) {
       const el = $('cfg-' + k); if (document.activeElement !== el) el.value = c[k];
     }
-    for (const k of ['topics_on', 'ai_know_each_other']) $('cfg-' + k).checked = !!c[k];
+    for (const k of ['topics_on', 'ai_know_each_other', 'night_kill', 'reveal_on_exit']) $('cfg-' + k).checked = !!c[k];
   }
   function readCfg() {
     const c = {};
     for (const k of ['ai_count', 'discuss_seconds', 'vote_seconds', 'max_rounds']) c[k] = parseInt($('cfg-' + k).value || 0, 10);
     c.model_strategy = $('cfg-model_strategy').value; c.password = $('cfg-password').value;
-    c.topics_on = $('cfg-topics_on').checked; c.ai_know_each_other = $('cfg-ai_know_each_other').checked;
+    for (const k of ['topics_on', 'ai_know_each_other', 'night_kill', 'reveal_on_exit']) c[k] = $('cfg-' + k).checked;
     return c;
   }
   $('host-panel').addEventListener('change', () => send({ type: 'host_config', cfg: readCfg() }));
@@ -157,8 +175,9 @@
       el.querySelector('.name').textContent = anon ? (isMe ? '你' : '？') : p.alias + (isMe ? '（你）' : '');
       el.classList.toggle('me', isMe);
       el.classList.toggle('dead', !p.alive);
+      el.classList.toggle('night-taken', p.died === 'taken');
       el.classList.toggle('offline', !p.connected && p.alive);
-      el.classList.toggle('typing', !!p.typing && state.phase === 'discuss');
+      el.classList.toggle('typing', !!p.typing && (state.phase === 'discuss' || state.phase === 'result'));
       el.classList.toggle('votable', state.phase === 'vote' && state.alive && p.alive && !isMe);
       el.classList.toggle('voted', state.phase === 'vote' && p.alias === myVote);
     });
@@ -187,8 +206,8 @@
   }
   function addChat(m) {
     const d = document.createElement('div');
-    d.className = 'msg' + (m.alias === state?.you ? ' me' : '');
-    d.innerHTML = `<span class="who"></span><span class="text"></span>`;
+    d.className = 'msg' + (m.alias === state?.you ? ' me' : '') + (m.last_words ? ' lastwords' : '');
+    d.innerHTML = `<span class="who"></span>${m.last_words ? '<span class="lw">遺言</span>' : ''}<span class="text"></span>`;
     d.querySelector('.who').textContent = m.alias; d.querySelector('.text').textContent = m.text;
     appendChat(d);
   }
@@ -223,29 +242,51 @@
   function showResult(r) {
     const first = shownResultRound !== r.round; shownResultRound = r.round;
     let h = `<div>第 ${r.round} 輪開票</div>`;
-    if (r.eliminated) {
+    const revealed = r.revealed !== false;
+    if (r.eliminated && revealed) {
       const who = r.was_ai ? (r.model ? `AI（${esc(r.model)}）` : 'AI') : `真人${r.nickname ? '：' + esc(r.nickname) : ''}`;
       h += `<div class="big">${esc(r.eliminated)} 被放逐，是 <span class="${r.was_ai ? 'ai' : 'human'}">${who}</span></div>`;
-    }
+    } else if (r.eliminated) h += `<div class="big">${esc(r.eliminated)} 被放逐</div><div class="muted">身分到結局才揭曉</div>`;
     else h += `<div class="big">${r.tie ? '平票，沒有人被放逐' : '沒有人投票'}</div>`;
     const rows = Object.entries(r.votes).map(([a, t]) => `<tr><td>${esc(a)}</td><td>→ ${t ? esc(t) : '棄票'}</td></tr>`).join('');
     h += `<table>${rows}</table>`;
     $('result').innerHTML = h;
     document.querySelectorAll('.seat').forEach(el => el.classList.remove('voted'));
-    if (r.eliminated) tagSeat({ alias: r.eliminated, is_ai: r.was_ai, nickname: r.nickname });
+    if (r.eliminated && revealed) tagSeat({ alias: r.eliminated, is_ai: r.was_ai, nickname: r.nickname });
     if (!first) return;   // 同一輪再收到 room_state（有人斷線之類）不要重播
-    sysMsg(r.eliminated ? `${r.eliminated} 被放逐（${r.was_ai ? 'AI' : '真人' + (r.nickname ? ' ' + r.nickname : '')}）` : '本輪平票');
+    const ident = revealed ? `（${r.was_ai ? 'AI' : '真人' + (r.nickname ? ' ' + r.nickname : '')}）` : '';
+    sysMsg(r.eliminated ? `${r.eliminated} 被放逐${ident}` : '本輪平票');
     if (r.eliminated) {
       const p = state.players.find(x => x.alias === r.eliminated);
-      const who = r.was_ai ? (r.model ? `是 AI（${esc(r.model)}）` : '是 AI') : `是真人${r.nickname ? '：' + esc(r.nickname) : ''}`;
+      const who = !revealed ? '身分到結局才揭曉' : r.was_ai ? (r.model ? `是 AI（${esc(r.model)}）` : '是 AI') : `是真人${r.nickname ? '：' + esc(r.nickname) : ''}`;
       showOverlay('exile', `<div class="face">${p ? avatarSVG(p.avatar) : ''}</div><div class="title">${esc(r.eliminated)} 被放逐</div>` +
-        `<div class="sub ${r.was_ai ? 'ai' : 'human'}">${who}</div>`, 5000, () => exileSeat(r.eliminated));
+        `<div class="sub ${!revealed ? '' : r.was_ai ? 'ai' : 'human'}">${who}</div>`, 5000, () => exileSeat(r.eliminated));
     } else if (r.tie) showOverlay('tie', `<div class="title">平票</div><div class="sub reveal">這輪沒有人被放逐</div>`, 3000);
   }
+  // 夜晚：整段蓋著深藍字卡，直到天亮；天亮：公布誰被帶走，關掉後座位暗掉
+  let shownNightRound = 0, shownDawnRound = 0;
+  function showNight(s) {
+    if (shownNightRound === s.round) return; shownNightRound = s.round;
+    const ms = Math.max(1000, (s.ends_at - s.server_time) * 1000);
+    showOverlay('night', `<div class="moon">🌙</div><div class="title">夜深了</div><div class="sub reveal">AI 正在挑要帶走誰<span class="dots"></span></div>`, ms);
+  }
+  function showDawn(n) {
+    if (shownDawnRound === n.round) return; shownDawnRound = n.round;
+    const p = state.players.find(x => x.alias === n.victim);
+    sysMsg(`天亮了，${n.victim} 昨晚被 AI 帶走了${n.nickname ? '（真人 ' + n.nickname + '）' : ''}`);
+    showOverlay('dawn', `<div class="face">${p ? avatarSVG(p.avatar) : ''}</div><div class="title">天亮了</div>` +
+      `<div class="sub">${esc(n.victim)} 昨晚被 AI 帶走了${n.nickname ? '<br><span class="human">真人：' + esc(n.nickname) + '</span>' : ''}</div>`, 6000, () => takenSeat(n.victim));
+    if (n.nickname) tagSeat({ alias: n.victim, is_ai: false, nickname: n.nickname });
+  }
+  function takenSeat(alias) {
+    const el = document.querySelector(`.seat[data-alias="${alias}"]`); if (el) el.classList.add('taken');
+  }
   // 蓋板字卡：砸進來、副標題一秒後翻出來、幾秒後淡出；點一下提早關。onClose 在關掉後呼叫
-  let overlayTimer = null, overlayOnClose = null;
+  let overlayTimer = null, overlayOnClose = null, overlaySeq = 0;
   function showOverlay(cls, html, ms, onClose) {
-    clearTimeout(overlayTimer); overlayOnClose = onClose || null;
+    clearTimeout(overlayTimer); overlaySeq++;
+    // 上一張還沒關完就被新的蓋掉（夜晚接天亮）：先把它的收尾做掉，免得等一下的關閉把新卡也關了
+    const prev = overlayOnClose; overlayOnClose = onClose || null; if (prev) prev();
     const ov = $('overlay'), card = $('overlay-card');
     ov.className = cls; card.className = cls; card.innerHTML = html + '<div class="hint">點一下跳過</div>';
     const sub = card.querySelector('.sub:not(.reveal)');
@@ -254,8 +295,8 @@
   }
   function hideOverlay() {
     const ov = $('overlay'); if (ov.classList.contains('hidden') || ov.classList.contains('closing')) return;
-    clearTimeout(overlayTimer); ov.classList.add('closing');
-    setTimeout(() => { ov.className = 'hidden'; const f = overlayOnClose; overlayOnClose = null; if (f) f(); }, 500);
+    clearTimeout(overlayTimer); ov.classList.add('closing'); const seq = overlaySeq;
+    setTimeout(() => { if (seq !== overlaySeq) return; ov.className = 'hidden'; const f = overlayOnClose; overlayOnClose = null; if (f) f(); }, 500);
   }
   $('overlay').onclick = hideOverlay;
   // 放逐動畫：座位抖一下、放大、往上飄走，再以灰掉的樣子回到位子上
@@ -268,13 +309,16 @@
     const why = m.winner === 'ai' ? 'AI 的數量追平真人了' : aiLeft ? '撐到最後一輪，AI 沒能追平' : 'AI 全部被揪出來了';
     showOverlay(`win win-${m.winner === 'ai' ? 'ai' : 'humans'}`,
       `<div class="title">${m.winner === 'ai' ? 'AI 獲勝' : '真人獲勝'}</div><div class="sub ${m.winner === 'ai' ? 'ai' : 'human'}">${why}</div>`, 6000);
+    const nick = (a) => { const p = m.players.find(x => x.alias === a); return p && !p.is_ai && p.nickname ? `${a}（${p.nickname}）` : a; };
+    const awards = (m.awards || []).map(a => `<div class="award"><span class="award-title">${esc(a.title)}</span>${a.aliases.map(x => esc(nick(x))).join('、')}<span class="award-detail">${esc(a.detail)}</span></div>`).join('');
     const h = `<div class="big ${m.winner === 'ai' ? 'ai' : 'human'}">${m.winner === 'ai' ? 'AI 獲勝' : '真人獲勝'}</div>` +
+      (awards ? `<div id="awards">${awards}</div>` : '') +
       `<table>${m.players.map(p => `<tr><td>${esc(p.alias)}</td><td class="${p.is_ai ? 'ai' : 'human'}">${p.is_ai ? 'AI ' + esc(p.model) : '真人 ' + esc(p.nickname)}</td><td>${p.alive ? '' : '出局'}</td></tr>`).join('')}</table>` +
       (m.cost_usd != null ? `<div class="muted">本局 API 費用約 $${m.cost_usd}</div>` : '') +
       `<div class="row" style="justify-content:center"><button onclick="location.href='/'">回大廳</button></div>` +
       uploadBox(m);
     $('result').innerHTML = h; $('result').classList.remove('hidden');
-    $('chat-form').classList.add('hidden'); $('vote-bar').classList.add('hidden');
+    $('chat-form').classList.add('hidden'); $('vote-bar').classList.add('hidden'); $('notice').classList.add('hidden');
     m.players.forEach(p => tagSeat(p));
     wireUpload(m);
   }
@@ -286,8 +330,12 @@
       <div>想幫 AI 變得更像人？可以把這局的聊天紀錄分享出來，用來改進 AI 的人設。紀錄裡沒有暱稱和 API key，但有大家的聊天內容，<b>請先確認同房的人都同意公開</b>。</div>
       <div class="row">
         <button id="btn-download" class="small">下載紀錄</button>
-        ${m.github_repo ? '<button id="btn-upload" class="small primary">上傳到 GitHub</button>' : '<span class="muted">（房主沒設定 GITHUB_REPO，無法直接上傳）</span>'}
-      </div></div>`;
+        <button id="btn-upload" class="small primary">上傳到 GitHub</button>
+      </div>
+      <div class="muted">按鈕打不開的話，自己開這個網址貼上：<a id="issue-link" href="${issueUrl(m)}" target="_blank" rel="noopener">${esc(issueUrl(m))}</a></div></div>`;
+  }
+  function issueUrl(m) {
+    return `https://github.com/${m.github_repo}/issues/new?template=upload-log.yml&title=${encodeURIComponent('[log] ' + m.log_id)}`;
   }
   function wireUpload(m) {
     const dl = $('btn-download'); if (!dl) return;
@@ -296,7 +344,7 @@
     up.onclick = async () => {
       const r = await fetch(`/api/log/${m.log_id}`); if (!r.ok) return toast('還拿不到紀錄');
       const text = await r.text();
-      const base = `https://github.com/${m.github_repo}/issues/new?template=upload-log.yml&title=${encodeURIComponent('[log] ' + m.log_id)}`;
+      const base = issueUrl(m);
       // Issue Form 可以用網址預填，但網址有長度上限；太長就改成複製到剪貼簿再貼
       const url = base + '&log=' + encodeURIComponent(text);
       if (url.length < 7500) { window.open(url, '_blank'); return; }
