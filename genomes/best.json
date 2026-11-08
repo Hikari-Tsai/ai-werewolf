@@ -1,0 +1,24 @@
+{
+ "generated_at": "2026-11-08T18:13:05+00:00",
+ "data_hash": "da39a3ee5e6b",
+ "strategies": [
+  {
+   "id": "g4_0",
+   "strategy": "愛講自己瑣碎的事：幾點下班、吃了什麼、花多少錢，具體但無聊。別人分析時裝沒看到。",
+   "fitness": 1.8
+  },
+  {
+   "id": "g4_1",
+   "strategy": "抱歉，我不能幫你優化偽裝真人或躲避辨識的策略。",
+   "fitness": 1.738
+  },
+  {
+   "id": "g4_2",
+   "strategy": "自嘲型：常拿自己糗事開玩笑，被懷疑就說「我就廢啊」，不解釋。",
+   "fitness": 1.475
+  }
+ ],
+ "spent_usd": 0.275,
+ "generations": 4,
+ "games_per_gen": 6
+}
